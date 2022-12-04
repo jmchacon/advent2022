@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "./day1",
+    "./day2",
+    "./day3",
+]
+default-members = [
+    "./day1",
+    "./day2",
+    "./day3",
+]
+
+[profile.test]
+opt-level = 3
+
+[profile.bench]
+debug = true
+
+[workspace.dependencies]
+color-eyre = { version = "0.6.2", default-features = false }
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.65"
+authors = ["James Chacon <chacon.james@gmail.com>"]
+
