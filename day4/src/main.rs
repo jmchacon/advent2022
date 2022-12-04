@@ -1,5 +1,6 @@
 //! day4 advent 2022
 use color_eyre::eyre::Result;
+use std::cmp::{max, min};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -10,8 +11,8 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let mut total = 0;
-
+    let mut all_overlap = 0;
+    let mut any_overlap = 0;
     for (line_num, l) in lines.iter().enumerate() {
         let p: Vec<_> = l.split(",").collect();
         assert!(p.len() == 2, "{} - bad line {l}", line_num + 1);
@@ -33,9 +34,15 @@ fn main() -> Result<()> {
 
         if comp_low1 >= comp_low2 && comp_high1 <= comp_high2 {
             println!("{} inside", line_num + 1);
-            total += 1
+            all_overlap += 1;
+        }
+
+        if max(low1, low2) <= min(high1, high2) {
+            println!("{} any", line_num + 1);
+            any_overlap += 1;
         }
     }
-    println!("total - {total}");
+    println!("all_overlap - {all_overlap}");
+    println!("any_overlap - {any_overlap}");
     Ok(())
 }
