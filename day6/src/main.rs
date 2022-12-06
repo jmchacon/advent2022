@@ -16,10 +16,10 @@ fn main() -> Result<()> {
         assert!(line.len() >= 4, "{} - bad line {l}", line_num + 1);
         let mut tot = 2;
         let mut tracking = Vec::<u8>::new();
-        tracking.push(line[0]);
-        tracking.push(line[1]);
-        tracking.push(line[2]);
-        for i in 3..line.len() {
+        for i in 0..=tot {
+            tracking.push(line[i]);
+        }
+        for i in tot + 1..line.len() {
             tracking.push(line[i]);
             tot += 1;
             let mut test = HashMap::new();
