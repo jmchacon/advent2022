@@ -11,19 +11,20 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
+    const SIZE: usize = 14; // use 4 for part 1
     for (line_num, l) in lines.iter().enumerate() {
         let line = l.as_str().as_bytes();
         assert!(line.len() >= 4, "{} - bad line {l}", line_num + 1);
-        let mut tot = 2;
+        let mut tot = SIZE - 1;
         let mut tracking = Vec::<u8>::new();
         for i in 0..=tot {
             tracking.push(line[i]);
         }
-        for i in tot + 1..line.len() {
+        for i in SIZE..line.len() {
             tracking.push(line[i]);
             tot += 1;
             let mut test = HashMap::new();
-            for j in tot - 3..=tot {
+            for j in tot - (SIZE - 1)..=tot {
                 test.entry(tracking[j]).and_modify(|v| *v += 1).or_insert(1);
             }
             let mut done = true;
