@@ -104,6 +104,9 @@ fn main() -> Result<()> {
     for node in tree.root().unwrap().traverse_post_order() {
         if let Some(p) = node.parent() {
             let mut size = node.data().size;
+            // Directories have no size initially but the hash
+            // map entry for it will have the size we need to insert.
+            // Then we add the size to the parent node.
             if size == 0 {
                 size = hm[&node.node_id()];
             }
