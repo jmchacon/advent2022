@@ -1,6 +1,5 @@
 //! day5 advent 2022
 use color_eyre::eyre::Result;
-use std::cmp::{max, min};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
