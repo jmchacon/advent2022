@@ -13,6 +13,7 @@ fn main() -> Result<()> {
     let mut x = 1;
     let mut cycles = 0;
     let mut sum = 0;
+    let mut pixel = 0;
     for (line_num, line) in lines.iter().enumerate() {
         let parts: Vec<&str> = line.split_whitespace().collect();
 
@@ -39,7 +40,19 @@ fn main() -> Result<()> {
             cycles += 1;
             if cycles == 20 || (cycles > 20 && (cycles - 20) % 40 == 0) {
                 sum += cycles * x;
-                println!("{cycles} {}", cycles * x);
+                //println!("{cycles} {}", cycles * x);
+            }
+            let mut out = ".";
+            if pixel >= x - 1 && pixel <= x + 1 {
+                out = "#";
+            }
+            print!("{out}");
+            if cycles % 40 == 0 {
+                println!("");
+            }
+            pixel += 1;
+            if pixel >= 40 {
+                pixel = 0;
             }
         }
         if let Some(v) = add {
