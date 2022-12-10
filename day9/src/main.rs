@@ -13,9 +13,13 @@ enum Moves {
     U,
     L,
     D,
+    NE,
+    SE,
+    NW,
+    SW,
 }
 
-#[derive(Debug, Display, EnumString)]
+#[derive(Clone, Debug, Display, EnumString, PartialEq)]
 enum Adjacent {
     On,
     W,
@@ -31,7 +35,7 @@ enum Adjacent {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct Location(i32, i32);
 
-const SIZE: usize = 1;
+const SIZE: usize = 9;
 const TAIL: usize = SIZE - 1;
 
 fn main() -> Result<()> {
@@ -42,7 +46,9 @@ fn main() -> Result<()> {
     let mut hm = HashSet::new();
     let mut cur = Vec::new();
     let mut adj = Vec::new();
-    for _ in 0..SIZE {
+    // Add an extra so we can overflow setup in recursion later w/o panic.
+    // slight memory usage.
+    for _ in 0..=SIZE {
         adj.push(Adjacent::On);
         cur.push(Location(0, 0));
     }
@@ -63,7 +69,7 @@ fn main() -> Result<()> {
         let moves = usize::from_str_radix(parts[1], 10).unwrap();
         for _ in 0..moves {
             process(0, &mut adj, &dir, &mut cur);
-            //println!("{line} - {:?} {:?}", adj, cur);
+            println!("{line} - {:?} {:?}", adj, cur);
             hm.insert(cur[TAIL].clone());
         }
     }
@@ -88,6 +94,18 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         (Adjacent::On, Moves::D) => {
             adj[i] = Adjacent::N;
         }
+        (Adjacent::On, Moves::NE) => {
+            adj[i] = Adjacent::SW;
+        }
+        (Adjacent::On, Moves::SE) => {
+            adj[i] = Adjacent::NW;
+        }
+        (Adjacent::On, Moves::NW) => {
+            adj[i] = Adjacent::SE;
+        }
+        (Adjacent::On, Moves::SW) => {
+            adj[i] = Adjacent::NE;
+        }
 
         (Adjacent::W, Moves::R) => {
             adj[i] = Adjacent::W;
@@ -102,6 +120,22 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         }
         (Adjacent::W, Moves::D) => {
             adj[i] = Adjacent::NW;
+        }
+        (Adjacent::W, Moves::NE) => {
+            adj[i] = Adjacent::W;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::NE, cur);
+        }
+        (Adjacent::W, Moves::SE) => {
+            adj[i] = Adjacent::W;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::SE, cur);
+        }
+        (Adjacent::W, Moves::NW) => {
+            adj[i] = Adjacent::S;
+        }
+        (Adjacent::W, Moves::SW) => {
+            adj[i] = Adjacent::N;
         }
 
         (Adjacent::E, Moves::R) => {
@@ -118,6 +152,22 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         (Adjacent::E, Moves::D) => {
             adj[i] = Adjacent::NE;
         }
+        (Adjacent::E, Moves::NE) => {
+            adj[i] = Adjacent::S;
+        }
+        (Adjacent::E, Moves::SE) => {
+            adj[i] = Adjacent::N;
+        }
+        (Adjacent::E, Moves::NW) => {
+            adj[i] = Adjacent::E;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::NW, cur);
+        }
+        (Adjacent::E, Moves::SW) => {
+            adj[i] = Adjacent::E;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::SW, cur);
+        }
 
         (Adjacent::S, Moves::R) => {
             adj[i] = Adjacent::SW;
@@ -132,6 +182,22 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         }
         (Adjacent::S, Moves::D) => {
             adj[i] = Adjacent::On;
+        }
+        (Adjacent::S, Moves::NE) => {
+            adj[i] = Adjacent::S;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::NE, cur);
+        }
+        (Adjacent::S, Moves::SE) => {
+            adj[i] = Adjacent::W;
+        }
+        (Adjacent::S, Moves::NW) => {
+            adj[i] = Adjacent::S;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::NW, cur);
+        }
+        (Adjacent::S, Moves::SW) => {
+            adj[i] = Adjacent::E;
         }
 
         (Adjacent::N, Moves::R) => {
@@ -148,6 +214,22 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
             cur[i] = Location(cur[i].0, cur[i].1 - 1);
             process(i + 1, adj, dir, cur);
         }
+        (Adjacent::N, Moves::NE) => {
+            adj[i] = Adjacent::W;
+        }
+        (Adjacent::N, Moves::SE) => {
+            adj[i] = Adjacent::N;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::SE, cur);
+        }
+        (Adjacent::N, Moves::NW) => {
+            adj[i] = Adjacent::E;
+        }
+        (Adjacent::N, Moves::SW) => {
+            adj[i] = Adjacent::N;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::SW, cur);
+        }
 
         (Adjacent::SE, Moves::R) => {
             adj[i] = Adjacent::S;
@@ -155,21 +237,39 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         (Adjacent::SE, Moves::L) => {
             adj[i] = Adjacent::E;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::NW, cur);
         }
         (Adjacent::SE, Moves::U) => {
             adj[i] = Adjacent::S;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::NW, cur);
         }
         (Adjacent::SE, Moves::D) => {
             adj[i] = Adjacent::E;
+        }
+        (Adjacent::SE, Moves::NE) => {
+            adj[i] = Adjacent::S;
+            cur[i] = Location(cur[i].0, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::U, cur);
+        }
+        (Adjacent::SE, Moves::SE) => {
+            adj[i] = Adjacent::On;
+        }
+        (Adjacent::SE, Moves::NW) => {
+            adj[i] = Adjacent::SE;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::NW, cur);
+        }
+        (Adjacent::SE, Moves::SW) => {
+            adj[i] = Adjacent::E;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1);
+            process(i + 1, adj, &Moves::L, cur);
         }
 
         (Adjacent::SW, Moves::R) => {
             adj[i] = Adjacent::W;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::NE, cur);
         }
         (Adjacent::SW, Moves::L) => {
             adj[i] = Adjacent::S;
@@ -177,10 +277,28 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         (Adjacent::SW, Moves::U) => {
             adj[i] = Adjacent::S;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::NE, cur);
         }
         (Adjacent::SW, Moves::D) => {
             adj[i] = Adjacent::W;
+        }
+        (Adjacent::SW, Moves::NE) => {
+            adj[i] = Adjacent::SW;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::NE, cur);
+        }
+        (Adjacent::SW, Moves::SE) => {
+            adj[i] = Adjacent::W;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1);
+            process(i + 1, adj, &Moves::R, cur);
+        }
+        (Adjacent::SW, Moves::NW) => {
+            adj[i] = Adjacent::S;
+            cur[i] = Location(cur[i].0, cur[i].1 + 1);
+            process(i + 1, adj, &Moves::U, cur);
+        }
+        (Adjacent::SW, Moves::SW) => {
+            adj[i] = Adjacent::On;
         }
 
         (Adjacent::NE, Moves::R) => {
@@ -189,7 +307,7 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         (Adjacent::NE, Moves::L) => {
             adj[i] = Adjacent::E;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::SW, cur);
         }
         (Adjacent::NE, Moves::U) => {
             adj[i] = Adjacent::E;
@@ -197,13 +315,31 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         (Adjacent::NE, Moves::D) => {
             adj[i] = Adjacent::N;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::SW, cur);
+        }
+        (Adjacent::NE, Moves::NE) => {
+            adj[i] = Adjacent::On;
+        }
+        (Adjacent::NE, Moves::SE) => {
+            adj[i] = Adjacent::N;
+            cur[i] = Location(cur[i].0, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::D, cur);
+        }
+        (Adjacent::NE, Moves::NW) => {
+            adj[i] = Adjacent::E;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1);
+            process(i + 1, adj, &Moves::L, cur);
+        }
+        (Adjacent::NE, Moves::SW) => {
+            adj[i] = Adjacent::NE;
+            cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::SW, cur);
         }
 
         (Adjacent::NW, Moves::R) => {
             adj[i] = Adjacent::W;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::SE, cur);
         }
         (Adjacent::NW, Moves::L) => {
             adj[i] = Adjacent::N;
@@ -214,7 +350,25 @@ fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Locatio
         (Adjacent::NW, Moves::D) => {
             adj[i] = Adjacent::N;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, &Moves::SE, cur);
+        }
+        (Adjacent::NW, Moves::NE) => {
+            adj[i] = Adjacent::W;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1);
+            process(i + 1, adj, &Moves::R, cur);
+        }
+        (Adjacent::NW, Moves::SE) => {
+            adj[i] = Adjacent::NW;
+            cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::SE, cur);
+        }
+        (Adjacent::NW, Moves::NW) => {
+            adj[i] = Adjacent::On;
+        }
+        (Adjacent::NW, Moves::SW) => {
+            adj[i] = Adjacent::N;
+            cur[i] = Location(cur[i].0, cur[i].1 - 1);
+            process(i + 1, adj, &Moves::D, cur);
         }
     }
 }
