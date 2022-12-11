@@ -1,9 +1,12 @@
 //! day11 advent 2022
 use color_eyre::eyre::Result;
-use std::fs::File;
+use num_bigint::BigUint;
+use num_traits::{One, Zero};
 use std::io;
 use std::io::BufRead;
+use std::mem::replace;
 use std::path::Path;
+use std::{fs::File, num::Wrapping};
 use strum_macros::{Display, EnumString};
 
 #[derive(Clone, Debug, Display, EnumString, PartialEq)]
@@ -14,23 +17,23 @@ enum Operation {
 
 #[derive(Clone, Debug, Display, EnumString, PartialEq)]
 enum OpVal {
-    Val(i128),
+    Val(BigUint),
     Old,
 }
 #[derive(Debug)]
 struct Monkey {
-    items: Vec<i128>,
+    items: Vec<BigUint>,
     op: Operation,
     op_val: OpVal,
-    test: i128,
+    test: u32,
     choice: [usize; 2],
-    inspected: i32,
+    inspected: u32,
 }
 
-const ROUNDS: usize = 20;
+const ROUNDS: usize = 1000;
 
 fn main() -> Result<()> {
-    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join("input.txt");
+    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join("input2.txt");
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
@@ -47,7 +50,7 @@ fn main() -> Result<()> {
             let mut monkey = Monkey {
                 items: Vec::new(),
                 op: Operation::Add,
-                op_val: OpVal::Val(0),
+                op_val: OpVal::Val(Zero::zero()),
                 test: 0,
                 choice: [0, 0],
                 inspected: 0,
@@ -58,8 +61,8 @@ fn main() -> Result<()> {
             let parts: Vec<&str> = line.split_whitespace().collect();
             assert!(parts.len() > 2, "{} - bad line {line}", line_num + 1);
             for item in parts[2..].iter() {
-                let i = i128::from_str_radix(item.trim_matches(','), 10).unwrap();
-                monkey.items.push(i);
+                let i = u32::from_str_radix(item.trim_matches(','), 10).unwrap();
+                monkey.items.push(BigUint::new(vec![i]));
             }
 
             // Operation: new = old + old
@@ -72,14 +75,16 @@ fn main() -> Result<()> {
             if parts[5] == "old" {
                 monkey.op_val = OpVal::Old;
             } else {
-                monkey.op_val = OpVal::Val(i128::from_str_radix(parts[5], 10).unwrap());
+                monkey.op_val = OpVal::Val(BigUint::new(vec![
+                    u32::from_str_radix(parts[5], 10).unwrap()
+                ]));
             }
 
             // Test: divisible by 17
             let Some((line_num, line)) = it.next() else { panic!("{} - bad line {line}", line_num+1); };
             let parts: Vec<&str> = line.split_whitespace().collect();
             assert!(parts.len() == 4, "{} - bad line {line}", line_num + 1);
-            monkey.test = i128::from_str_radix(parts[3], 10).unwrap();
+            monkey.test = u32::from_str_radix(parts[3], 10).unwrap();
 
             // If true: throw to monkey 4
             let Some((line_num, line)) = it.next() else { panic!("{} - bad line {line}", line_num+1); };
@@ -105,22 +110,30 @@ fn main() -> Result<()> {
             let mut monkey = &mut monkeys[i];
             let mut new = Vec::new();
             for item in &monkey.items {
-                let mut worry = *item;
-                let val = match monkey.op_val {
-                    OpVal::Val(v) => v,
-                    OpVal::Old => worry,
-                };
+                let mut worry = item.clone();
+                /*let val = match monkey.op_val {
+                    OpVal::Val(v) => &v,
+                    OpVal::Old => &worry.clone(),
+                };*/
                 match monkey.op {
                     Operation::Add => {
-                        worry += val;
+                        if let OpVal::Val(v) = &monkey.op_val {
+                            worry += v;
+                        } else {
+                            worry *= 2 as u8;
+                        }
                     }
                     Operation::Multiply => {
-                        worry *= val;
+                        if let OpVal::Val(v) = &monkey.op_val {
+                            worry *= v;
+                        } else {
+                            worry = worry.pow(2);
+                        }
                     }
                 }
-                worry /= 3;
+                //worry /= 3 as u8;
                 let index;
-                if worry % monkey.test == 0 {
+                if &worry % monkey.test == Zero::zero() {
                     index = monkey.choice[0];
                 } else {
                     index = monkey.choice[1];
@@ -134,14 +147,16 @@ fn main() -> Result<()> {
                 monkeys[index].items.push(worry);
             }
         }
-        for monkey in &monkeys {
+        /*for monkey in &monkeys {
             println!("{round} - {:?}", monkey);
-        }
+        }*/
+        println!("{round}");
     }
     let mut inspected = Vec::new();
     for monkey in monkeys {
         inspected.push(monkey.inspected);
     }
+    println!("inspected: {inspected:?}");
     inspected.sort();
     inspected.reverse();
     println!(
