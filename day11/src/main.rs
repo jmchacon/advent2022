@@ -27,7 +27,7 @@ struct Monkey {
     inspected: i32,
 }
 
-const ROUNDS: usize = 20;
+const ROUNDS: usize = 10000;
 
 fn main() -> Result<()> {
     let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join("input.txt");
@@ -96,11 +96,13 @@ fn main() -> Result<()> {
             monkeys.push(monkey);
         }
     }
+    let mut lcm = 1;
     for monkey in &monkeys {
+        lcm *= monkey.test;
         println!("{:?}", monkey);
     }
 
-    for round in 0..ROUNDS {
+    for _round in 0..ROUNDS {
         for i in 0..monkeys.len() {
             let mut monkey = &mut monkeys[i];
             let mut new = Vec::new();
@@ -118,7 +120,8 @@ fn main() -> Result<()> {
                         worry *= val;
                     }
                 }
-                worry /= 3;
+                worry %= lcm;
+                //worry /= 3;
                 let index;
                 if worry % monkey.test == 0 {
                     index = monkey.choice[0];
@@ -134,10 +137,12 @@ fn main() -> Result<()> {
                 monkeys[index].items.push(worry);
             }
         }
-        for monkey in &monkeys {
-            println!("{round} - {:?}", monkey);
-        }
     }
+    println!("");
+    for monkey in &monkeys {
+        println!("{:?}", monkey);
+    }
+    
     let mut inspected = Vec::new();
     for monkey in monkeys {
         inspected.push(monkey.inspected);
@@ -148,7 +153,7 @@ fn main() -> Result<()> {
         "top 2 - {} * {} = {}",
         inspected[0],
         inspected[1],
-        inspected[0] * inspected[1]
+        inspected[0] as u128 * inspected[1] as u128
     );
     Ok(())
 }
