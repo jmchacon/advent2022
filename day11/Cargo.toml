@@ -8,3 +8,5 @@ rust-version.workspace = true
 [dependencies]
 color-eyre = { workspace = true }
 slab_tree = "0.3.2"
+strum = { workspace = true }
+strum_macros = { workspace = true }
