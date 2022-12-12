@@ -30,13 +30,12 @@ impl Location {
             if i.0 >= grid[0].len() as i32 || i.1 >= grid.len() as i32 || i.0 < 0 || i.1 < 0 {
                 continue;
             }
-            let mut val = grid[i.1 as usize][i.0 as usize] as u32;
-            if val > here + 1 {
-                val = 9999999;
-            } else {
-                val = 1;
+            let val = grid[i.1 as usize][i.0 as usize] as u32;
+            // Technically this can be handled with BFS so we're just reducing to that
+            // by only adding nodes we like, not all nodes.
+            if val <= here + 1 {
+                v.push((Self(i.0 as usize, i.1 as usize), 1));
             }
-            v.push((Self(i.0 as usize, i.1 as usize), val));
         }
         v
     }
@@ -87,10 +86,29 @@ fn main() -> Result<()> {
         |p| *p == end,
     )
     .unwrap();
-    for g in grid {
+    for g in &grid {
         println!("{g:?}");
     }
     println!("begin - {begin:?} end - {end:?}");
     println!("path: {}", res.0.len() - 1);
+
+    let mut best = Vec::new();
+    for y in 0..grid.len() {
+        for x in 0..grid[y].len() {
+            if grid[y][x] == 1 {
+                let res = astar(
+                    &Location(x, y),
+                    |p| p.successors(&grid),
+                    |p| p.distance(&Location(x, y)),
+                    |p| *p == end,
+                );
+                //println!("alt begin {x},{y} - {}", res.0.len() - 1);
+                if let Some(res) = res {
+                    best.push(res.0.len() - 1);
+                }
+            }
+        }
+    }
+    println!("best - {:?}", best.iter().min().unwrap());
     Ok(())
 }
