@@ -142,7 +142,7 @@ fn main() -> Result<()> {
     for monkey in &monkeys {
         println!("{:?}", monkey);
     }
-    
+
     let mut inspected = Vec::new();
     for monkey in monkeys {
         inspected.push(monkey.inspected);
