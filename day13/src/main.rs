@@ -16,11 +16,31 @@ struct Args {
     filename: String,
 }
 
-#[derive(Clone, Debug, Display, EnumString, PartialEq)]
+#[derive(Clone, Debug, Display, EnumString)]
 enum Entry {
     Val(i32),
     List(Vec<Entry>),
 }
+
+impl Ord for Entry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        compare(&self, &other)
+    }
+}
+
+impl PartialOrd for Entry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Entry {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for Entry {}
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -46,6 +66,24 @@ fn main() -> Result<()> {
         println!("{e:?}");
     }
 
+    let mut entries2 = entries.clone();
+    let two = Entry::List(vec![Entry::Val(2)]);
+    let six = Entry::List(vec![Entry::Val(6)]);
+    entries2.push(Entry::List(vec![two.clone()]));
+    entries2.push(Entry::List(vec![six.clone()]));
+    println!("\nentries2");
+    entries2.sort();
+    let (mut ind1, mut ind2) = (0 as usize, 0 as usize);
+    for (i, e) in entries2.iter().enumerate() {
+        if e == &two {
+            ind1 = i + 1;
+        }
+        if e == &six {
+            ind2 = i + 1;
+        }
+        println!("{e:?}");
+    }
+
     let mut pos = 0;
     let mut good = Vec::new();
     loop {
@@ -59,6 +97,7 @@ fn main() -> Result<()> {
     }
     println!("good - {good:?}");
     println!("sum - {}", good.iter().sum::<usize>());
+    println!("2 * 6 = {}", ind1 * ind2);
     Ok(())
 }
 
@@ -68,16 +107,12 @@ fn compare(entry1: &Entry, entry2: &Entry) -> Ordering {
             panic!("can't get here");
         }
         (Entry::Val(_), Entry::List(_)) => {
-            println!("left val");
             return compare(&Entry::List(vec![entry1.clone()]), entry2);
         }
         (Entry::List(_), Entry::Val(_)) => {
-            println!("right val");
             return compare(entry1, &Entry::List(vec![entry2.clone()]));
         }
         (Entry::List(a), Entry::List(b)) => {
-            println!("list a: {a:?}");
-            println!("list b: {b:?}");
             let mut aa = a.iter();
             let mut bb = b.iter();
 
@@ -103,7 +138,6 @@ fn compare(entry1: &Entry, entry2: &Entry) -> Ordering {
                 let nextb = nextb.unwrap();
                 if let (Entry::Val(compa), Entry::Val(compb)) = (nexta, nextb) {
                     if compa > compb {
-                        println!("{compa} > {compb}");
                         return Ordering::Greater;
                     }
                     if compa < compb {
