@@ -96,7 +96,7 @@ fn main() -> Result<()> {
         }
     }
     let bot = maxy + 2;
-    println!("{minx} -> {maxx} | {maxy} + {bot}");
+    println!("{minx} -> {maxx} | {maxy} + bot {bot}");
 
     let mut sand = 0;
     let mut state = State::Falling;
