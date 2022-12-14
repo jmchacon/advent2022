@@ -117,7 +117,6 @@ fn main() -> Result<()> {
                 }
             }
             cur = Location(cur.0, cur.1 + 1);
-            //println!("trying {cur:?}");
             // Straight down ok, continue
             if !hs.contains(&cur) {
                 if args.infinity {
@@ -127,19 +126,16 @@ fn main() -> Result<()> {
                         break;
                     }
                 }
-                //                println!("down cur - {cur:?}");
                 continue;
             }
             // Try left
             cur = Location(cur.0 - 1, cur.1);
             if !hs.contains(&cur) {
-                //              println!("down left cur - {cur:?}");
                 continue;
             }
             // Try right - if not we're stuck.
             cur = Location(cur.0 + 2, cur.1);
             if hs.contains(&cur) {
-                //            println!("down right cur - {cur:?}");
                 cur = Location(cur.0 - 1, cur.1 - 1);
                 state = State::Stopped;
                 break;
