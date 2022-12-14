@@ -14,7 +14,7 @@ struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
 
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     infinity: bool,
 }
 
@@ -109,7 +109,7 @@ fn main() -> Result<()> {
         }
 
         loop {
-            if args.infinity {
+            if !args.infinity {
                 if cur.0 < minx || cur.0 > maxx || cur.1 > maxy {
                     println!("inf cur - {cur:?}");
                     state = State::Infinity;
@@ -117,9 +117,16 @@ fn main() -> Result<()> {
                 }
             }
             cur = Location(cur.0, cur.1 + 1);
-            println!("trying {cur:?}");
+            //println!("trying {cur:?}");
             // Straight down ok, continue
             if !hs.contains(&cur) {
+                if args.infinity {
+                    if cur.1 == bot {
+                        cur = Location(cur.0, cur.1 - 1);
+                        state = State::Stopped;
+                        break;
+                    }
+                }
                 //                println!("down cur - {cur:?}");
                 continue;
             }
@@ -141,7 +148,6 @@ fn main() -> Result<()> {
         if state == State::Infinity {
             break;
         }
-        println!("inserting {cur:?}");
         hs.insert(cur);
     }
     // Counted infinity particle
