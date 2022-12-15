@@ -1,7 +1,7 @@
 //! day14 advent 2022
 use clap::Parser;
 use color_eyre::eyre::Result;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -16,6 +16,9 @@ struct Args {
 
     #[arg(long, default_value_t = false)]
     infinity: bool,
+
+    #[arg(long, default_value_t = false)]
+    draw: bool,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -28,6 +31,10 @@ enum State {
     Falling,
 }
 
+enum Type {
+    Rock,
+    Sand,
+}
 fn main() -> Result<()> {
     color_eyre::install()?;
     let args: Args = Args::parse();
@@ -36,7 +43,7 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let mut hs = HashSet::new();
+    let mut hm = HashMap::new();
     for (line_num, line) in lines.iter().enumerate() {
         let parts = line.split(" -> ").collect::<Vec<_>>();
         assert!(parts.len() >= 2, "{} - bad line {line}", line_num + 1);
@@ -55,25 +62,25 @@ fn main() -> Result<()> {
                     panic!("{} - bad line {line}", line_num + 1);
                 }
                 (true, false) => {
+                    let (l, h);
                     if oldy < y {
-                        for d in oldy..=y {
-                            hs.insert(Location(x, d));
-                        }
+                        (l, h) = (oldy, y);
                     } else {
-                        for d in (y..=oldy).rev() {
-                            hs.insert(Location(x, d));
-                        }
+                        (l, h) = (y, oldy);
+                    }
+                    for d in l..=h {
+                        hm.insert(Location(x, d), Type::Rock);
                     }
                 }
                 (false, true) => {
+                    let (l, h);
                     if oldx < x {
-                        for d in oldx..=x {
-                            hs.insert(Location(d, y));
-                        }
+                        (l, h) = (oldx, x);
                     } else {
-                        for d in (x..=oldx).rev() {
-                            hs.insert(Location(d, y));
-                        }
+                        (l, h) = (x, oldx);
+                    }
+                    for d in l..=h {
+                        hm.insert(Location(d, y), Type::Rock);
                     }
                 }
             }
@@ -84,7 +91,7 @@ fn main() -> Result<()> {
     let mut maxx = i32::MIN;
     let mut minx = i32::MAX;
     let mut maxy = i32::MIN;
-    for l in &hs {
+    for l in hm.keys() {
         if l.0 > maxx {
             maxx = l.0;
         }
@@ -97,18 +104,21 @@ fn main() -> Result<()> {
     }
     let bot = maxy + 2;
     println!("{minx} -> {maxx} | {maxy} + bot {bot}");
-
+    println!("{}x{}", maxx - minx + 1, bot);
     let mut sand = 0;
     let mut state = State::Falling;
+    let mut steps = 0;
     loop {
         sand += 1;
         let mut cur = Location(500, 0);
-        if hs.contains(&cur) {
+        _ = args.draw && print_board(&hm, &cur, minx, maxx, maxy);
+        if hm.contains_key(&cur) {
             println!("blocked at source?");
             break;
         }
 
         loop {
+            steps += 1;
             if !args.infinity {
                 if cur.0 < minx || cur.0 > maxx || cur.1 > maxy {
                     println!("inf cur - {cur:?}");
@@ -118,7 +128,7 @@ fn main() -> Result<()> {
             }
             cur = Location(cur.0, cur.1 + 1);
             // Straight down ok, continue
-            if !hs.contains(&cur) {
+            if !hm.contains_key(&cur) {
                 if args.infinity {
                     if cur.1 == bot {
                         cur = Location(cur.0, cur.1 - 1);
@@ -126,16 +136,18 @@ fn main() -> Result<()> {
                         break;
                     }
                 }
+                _ = args.draw && print_board(&hm, &cur, minx, maxx, maxy);
                 continue;
             }
             // Try left
             cur = Location(cur.0 - 1, cur.1);
-            if !hs.contains(&cur) {
+            if !hm.contains_key(&cur) {
+                _ = args.draw && print_board(&hm, &cur, minx, maxx, maxy);
                 continue;
             }
             // Try right - if not we're stuck.
             cur = Location(cur.0 + 2, cur.1);
-            if hs.contains(&cur) {
+            if hm.contains_key(&cur) {
                 cur = Location(cur.0 - 1, cur.1 - 1);
                 state = State::Stopped;
                 break;
@@ -144,11 +156,48 @@ fn main() -> Result<()> {
         if state == State::Infinity {
             break;
         }
-        hs.insert(cur);
+        _ = args.draw && print_board(&hm, &cur, minx, maxx, maxy);
+        hm.insert(cur, Type::Sand);
     }
     // Counted infinity particle
     sand -= 1;
     println!("state - {state}");
+    println!("steps - {steps}");
     println!("sand - {sand}");
     Ok(())
+}
+
+fn print_board(
+    hm: &HashMap<Location, Type>,
+    cur: &Location,
+    minx: i32,
+    maxx: i32,
+    maxy: i32,
+) -> bool {
+    for y in 0..=maxy {
+        for x in 0..=maxx - minx {
+            let mut print;
+            let check = Location(x + minx, y);
+            if !hm.contains_key(&check) {
+                print = ".";
+            } else {
+                match hm.get(&check).unwrap() {
+                    Type::Rock => {
+                        print = "#";
+                    }
+                    Type::Sand => {
+                        print = "o";
+                    }
+                }
+            }
+
+            if &check == cur {
+                print = "o";
+            }
+            print!("{print}");
+        }
+        println!();
+    }
+    println!();
+    true
 }
