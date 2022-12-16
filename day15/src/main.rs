@@ -6,6 +6,7 @@ use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::path::Path;
+use std::time::Instant;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -77,70 +78,36 @@ fn main() -> Result<()> {
     );
 
     // Find all covered spaces on row args.target and then subtract off any beacons/sensors on that line.
-    let mut covered = vec![false; width as usize];
-    cover_row(&mut covered, &inp, args.target, minx);
-    let sum = covered
-        .iter()
-        .map(|v| if *v { 1 } else { 0 })
-        .sum::<usize>();
-    println!("sum - {sum}");
+    let now = Instant::now();
+    let c = cover2_row(&inp, args.target, minx, true);
+    let elapsed = Instant::now().duration_since(now);
+    println!("{elapsed:?} - sum - {c}");
 
+    let now = Instant::now();
     for y in args.boundingx..=args.boundingy {
-        /*if y % 1000 == 0 {
-            println!("{y}");
-        }*/
-        if cover2_row(&inp, y, args.boundingx) {
+        if cover2_row(&inp, y, args.boundingx, false) == -1 {
             break;
         }
-        /*
-        for (pos, c) in covered.iter().enumerate() {
-            let p = pos as i64;
-            // Skip if outside the bounding box
-            if p + minx < args.boundingx || p + minx > args.boundingy {
-                continue;
-            }
-            if !c && !inp.contains_key(&Ent(p + minx, y)) {
-                println!("{},{y}", p + minx);
-                println!("freq = {}", (p + minx) * 4000000 + y);
-                done = true;
-                break;
-            }
-        }*/
     }
-    Ok(())
-}
+    let elapsed = Instant::now().duration_since(now);
 
-fn cover_row(covered: &mut Vec<bool>, inp: &HashMap<Ent, u64>, target: i64, minx: i64) {
-    for (k, v) in inp {
-        // we now skip beacons.
-        if *v == 0 {
-            continue;
-        }
-        let dist = k.1.abs_diff(target);
-        if dist <= *v {
-            let tot = ((*v * 2 + 1) - dist * 2) as usize;
-            let start = ((k.0 - (tot / 2) as i64) - minx) as usize;
-            for s in start..start + tot {
-                covered[s] = true;
-            }
-        }
-    }
-    for (k, _) in inp {
-        // See if it's a beacon/sensor on this row. That can't be a beacon then.
-        if k.1 == target {
-            covered[(k.0 - minx) as usize] = false;
-        }
-    }
+    println!("{elapsed:?}");
+
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct Interval(i64, i64);
 
-fn cover2_row(inp: &HashMap<Ent, u64>, target: i64, start_min: i64) -> bool {
+fn cover2_row(inp: &HashMap<Ent, u64>, target: i64, start_min: i64, count: bool) -> i64 {
     let mut ints = Vec::new();
+    let mut beacons = 0;
     for (k, v) in inp {
         // we now skip beacons.
         if *v == 0 {
+            if k.1 == target {
+                beacons += 1;
+            }
             continue;
         }
         let dist = k.1.abs_diff(target);
@@ -152,26 +119,40 @@ fn cover2_row(inp: &HashMap<Ent, u64>, target: i64, start_min: i64) -> bool {
     }
     ints.sort();
     let mut min = start_min;
+    let mut c = 0;
     for i in ints {
         // Skip if outside our box/overlap with an existing span.
         if i.0 + i.1 < min {
             continue;
         }
         if i.0 > min {
-            if !inp.contains_key(&Ent(min, target)) {
-                println!("{},{target}", min);
-                println!("freq = {}", min * 4000000 + target);
-                return true;
+            if count {
+                c += i.1 - i.0;
+            } else {
+                // First gap we can just abort.
+                if !inp.contains_key(&Ent(min, target)) {
+                    println!("{},{target}", min);
+                    println!("freq = {}", min * 4000000 + target);
+                    return -1;
+                }
+            }
+        } else {
+            if count {
+                c += i.1 - (min - i.0);
             }
         }
 
         if i.0 < min {
             min = (min - (min - i.0)) + i.1;
         } else {
-            min += i.1;
+            min += (i.0 - min) + (i.1 - i.0);
         }
     }
-    false
+    c -= beacons;
+    if count {
+        return c;
+    }
+    return i64::MIN;
 }
 
 fn min_check(a: i64, min: &mut i64, dist: u64) {
