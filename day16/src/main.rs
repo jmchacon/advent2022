@@ -2,7 +2,7 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 use itertools::Itertools;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -86,7 +86,6 @@ fn main() -> Result<()> {
                 println!("{c}");
             }
 
-            //println!("{x:?}");
             let mut cur = String::from("AA");
             let mut minutes = 0;
             let mut flow_rate = 0;
@@ -115,15 +114,22 @@ fn main() -> Result<()> {
             }
         }
         println!("AA -> {best:?} {max}");
-        let cur = String::from("AA");
-        let flows = nodes.keys().cloned().collect::<Vec<_>>();
-        max = find_best(&cur, &flows, &nodes, &paths, 30);
-    } else {
-        let cur = String::from("AA");
-        let flows = nodes.keys().cloned().collect::<Vec<_>>();
-        max = find_best(&cur, &flows, &nodes, &paths, 30);
     }
-    println!("AA -> {best:?} {max}");
+    let cur = String::from("AA");
+    let flows = nodes.keys().cloned().collect::<Vec<_>>();
+    let ret = find_best(&cur, &flows, &nodes, &paths, 30, 1, flows.len());
+    println!("AA -> {:?} {}", ret.1, ret.0);
+    let ret = find_best(&cur, &flows, &nodes, &paths, 26, 1, flows.len() / 2);
+    println!("2 - AA -> {:?} {}", ret.1, ret.0);
+    let mut n = nodes.keys().cloned().collect::<HashSet<_>>();
+    for r in &ret.1 {
+        n.remove(r);
+    }
+    let flows = n.iter().cloned().collect::<Vec<_>>();
+    println!("2 - {flows:?}");
+    let ret2 = find_best(&cur, &flows, &nodes, &paths, 26, 1, flows.len());
+    println!("2 - AA -> {:?} {}", ret2.1, ret2.0);
+    println!("2 = {}", ret.0 + ret2.0);
 
     Ok(())
 }
@@ -134,7 +140,9 @@ fn find_best(
     nodes: &HashMap<&String, &Location>,
     paths: &HashMap<String, Vec<&String>>,
     minutes: usize,
-) -> usize {
+    depth: usize,
+    max_depth: usize,
+) -> (usize, Vec<String>) {
     let mut choices = Vec::new();
 
     for f in flows.iter().cloned() {
@@ -149,14 +157,33 @@ fn find_best(
 
         let new_flow_rate = nodes[f].flow * (minutes - steps);
 
-        let rest = flows
-            .iter()
-            .filter(|v| **v != f)
-            .cloned()
-            .collect::<Vec<_>>();
-        choices.push(new_flow_rate + find_best(f, &rest, nodes, paths, minutes - steps));
+        if depth < max_depth {
+            let rest = flows
+                .iter()
+                .filter(|v| **v != f)
+                .cloned()
+                .collect::<Vec<_>>();
+            let mut new = find_best(
+                f,
+                &rest,
+                nodes,
+                paths,
+                minutes - steps,
+                depth + 1,
+                max_depth,
+            );
+            let mut p = Vec::from([f.clone()]);
+            p.append(&mut new.1);
+            choices.push((new_flow_rate + new.0, p));
+        } else {
+            choices.push((new_flow_rate, Vec::from([f.clone()])));
+        }
     }
-    *choices.iter().max().unwrap_or(&0)
+    choices
+        .iter()
+        .max()
+        .unwrap_or(&(0, Vec::from([cur.clone()])))
+        .clone()
 }
 
 fn find_path<'a>(
