@@ -2,11 +2,12 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 use itertools::Itertools;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::path::Path;
+use std::time::Instant;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -103,33 +104,41 @@ fn main() -> Result<()> {
             if minutes <= 30 {
                 let left = 30 - minutes;
                 total_flow += left * flow_rate;
-                //minutes += left;
-                //println!("AA -> {x:?} {minutes} {total_flow}");
+
                 if total_flow > max {
                     max = total_flow;
                     best = x.clone();
                 }
-            } else {
-                //println!("AA -> {x:?} too long at {minutes} minutes")
             }
         }
         println!("AA -> {best:?} {max}");
     }
     let cur = String::from("AA");
     let flows = nodes.keys().cloned().collect::<Vec<_>>();
-    let ret = find_best(&cur, &flows, &nodes, &paths, 30, 1, flows.len());
-    println!("AA -> {:?} {}", ret.1, ret.0);
-    let ret = find_best(&cur, &flows, &nodes, &paths, 26, 1, flows.len() / 2);
-    println!("2 - AA -> {:?} {}", ret.1, ret.0);
-    let mut n = nodes.keys().cloned().collect::<HashSet<_>>();
-    for r in &ret.1 {
-        n.remove(r);
-    }
-    let flows = n.iter().cloned().collect::<Vec<_>>();
-    println!("2 - {flows:?}");
-    let ret2 = find_best(&cur, &flows, &nodes, &paths, 26, 1, flows.len());
-    println!("2 - AA -> {:?} {}", ret2.1, ret2.0);
-    println!("2 = {}", ret.0 + ret2.0);
+    let now = Instant::now();
+    let ret = find_best(&cur, &flows, &nodes, &paths, 30);
+    let elapsed = Instant::now().duration_since(now);
+    println!("{elapsed:?} AA -> {:?} {}", ret.1, ret.0);
+
+    // Generate all P(flows.len(), flows.len()/2) perms and then for each one of those run again on the remainder
+    // NOTE: We can't just generate them all with itertools.permutate() since many paths have early ends (see test
+    // in find_best/find_best2). So those have to expand the permutations manually and then prune whole subpaths that
+    // can't work. This drastically reduces the search space to something which takes 5s to run.
+    let mut v = Vec::<String>::new();
+    let now = Instant::now();
+    let new = find_best2(
+        &cur,
+        &flows,
+        &nodes,
+        &paths,
+        26,
+        0,
+        &mut v,
+        0,
+        flows.len() / 2,
+    );
+    let elapsed = Instant::now().duration_since(now);
+    println!("{elapsed:?} score {} from {:?}", new.0, new.1);
 
     Ok(())
 }
@@ -140,8 +149,6 @@ fn find_best(
     nodes: &HashMap<&String, &Location>,
     paths: &HashMap<String, Vec<&String>>,
     minutes: usize,
-    depth: usize,
-    max_depth: usize,
 ) -> (usize, Vec<String>) {
     let mut choices = Vec::new();
 
@@ -157,28 +164,86 @@ fn find_best(
 
         let new_flow_rate = nodes[f].flow * (minutes - steps);
 
+        let rest = flows
+            .iter()
+            .filter(|v| **v != f)
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut new = find_best(f, &rest, nodes, paths, minutes - steps);
+        let mut p = Vec::from([f.clone()]);
+        p.append(&mut new.1);
+        choices.push((new_flow_rate + new.0, p));
+    }
+    choices
+        .iter()
+        .max()
+        .unwrap_or(&(0, Vec::from([cur.clone()])))
+        .clone()
+}
+
+fn find_best2(
+    cur: &String,
+    flows: &Vec<&String>,
+    nodes: &HashMap<&String, &Location>,
+    paths: &HashMap<String, Vec<&String>>,
+    minutes: usize,
+    cur_flow: usize,
+    cur_path: &mut Vec<String>,
+    depth: usize,
+    max_depth: usize,
+) -> (usize, Vec<String>) {
+    let mut choices = Vec::new();
+    cur_path.push(cur.clone());
+    for f in flows.iter().cloned() {
         if depth < max_depth {
+            let key = cur.clone() + "->" + f;
+            let steps = paths[&key].len();
+
+            // Prune off branches that can't finish.
+            // In the input set this turns 15! into a lot smaller space.
+            if steps >= minutes {
+                continue;
+            }
+
+            let new_flow_rate = nodes[f].flow * (minutes - steps);
             let rest = flows
                 .iter()
                 .filter(|v| **v != f)
                 .cloned()
                 .collect::<Vec<_>>();
-            let mut new = find_best(
+            choices.push(find_best2(
                 f,
                 &rest,
                 nodes,
                 paths,
                 minutes - steps,
+                cur_flow + new_flow_rate,
+                cur_path,
                 depth + 1,
                 max_depth,
-            );
-            let mut p = Vec::from([f.clone()]);
-            p.append(&mut new.1);
-            choices.push((new_flow_rate + new.0, p));
+            ));
         } else {
-            choices.push((new_flow_rate, Vec::from([f.clone()])));
+            // Here we've completed a valid P(X,R) based on depth. Now given the rest of
+            // the nodes send that off to find_best to get 2nd path. We're looking for the max
+            // of path1+path2 which isn't necessarily the max of "find the largest P(X,R) and then find
+            // the value of the remainder" as ordering/weight can cause the first one to be slightly
+            // under the max and the 2nd path picks up the slack.
+            let mut p = cur_path.clone();
+            p.push(f.clone());
+            // Might get here with minutes remaining since the previous one above this didn't know
+            // our depth was expiring. So we need to add on the remainder from its last flow rate.
+            // Thankfully we know that since the last node in cur_path is the one to lookup and add.
+            let mut cur_flow = cur_flow;
+            if minutes > 1 {
+                cur_flow += (minutes - 1) * nodes[&cur_path[cur_path.len() - 1]].flow;
+            }
+            let mut new = find_best(&cur_path[0], &flows, &nodes, &paths, 26);
+            p.append(&mut new.1);
+            choices.push((new.0 + cur_flow, p));
+            break;
         }
     }
+    cur_path.pop();
     choices
         .iter()
         .max()
