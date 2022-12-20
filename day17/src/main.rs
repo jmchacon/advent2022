@@ -1,13 +1,13 @@
 //! day17 advent 2022
 use clap::Parser;
 use color_eyre::eyre::Result;
-use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::path::Path;
-use strum_macros::Display;
+use std::{cmp::Ordering, time::Instant};
+use strum_macros::{Display, EnumCount as EnumCountMacro};
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -17,16 +17,19 @@ struct Args {
 
     #[arg(long, default_value_t = 2022)]
     rocks: usize,
+
+    #[arg(long, default_value_t = false)]
+    print_each_step: bool,
 }
 
-#[derive(Clone, Debug, Display, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, Hash, PartialEq)]
 enum Dir {
     Left,
     Right,
     Down,
 }
 
-#[derive(Clone, Debug, Display, PartialEq)]
+#[derive(Clone, Debug, Display, EnumCountMacro, Eq, Hash, PartialEq)]
 enum Rock {
     HLine,
     Plus,
@@ -145,6 +148,14 @@ fn main() -> Result<()> {
         }
     }
 
+    let now = Instant::now();
+    let highest = compute(args.rocks, args.print_each_step, &air);
+    let elapsed = now.elapsed();
+    println!("{elapsed:?} highest: {highest}");
+    Ok(())
+}
+
+fn compute(iterations: usize, print_each: bool, air: &Vec<Dir>) -> usize {
     let mut filled = HashSet::new();
     for x in &[0, 8] {
         for y in 0..=4 {
@@ -154,13 +165,15 @@ fn main() -> Result<()> {
     for x in 0..=8 {
         filled.insert(Location(x, 0));
     }
+    print_board(print_each, &filled, &HashSet::new());
+
     let mut highest = 0;
     let mut start_y;
     let start_x = 3;
     let mut cur = Rock::Square;
     let mut air_pos = 0;
-    print_board(&filled);
-    for i in 0..args.rocks {
+    let mut tracked: HashMap<(Rock, usize), (usize, usize)> = HashMap::new();
+    for i in 0..iterations {
         cur = cur.next();
         start_y = highest + 4;
         for y in start_y..start_y + cur.height() {
@@ -169,11 +182,8 @@ fn main() -> Result<()> {
         }
 
         let mut covered = cur.covers(Location(start_x, start_y));
-        print_board(&filled.clone().union(&covered).cloned().collect());
+        print_board(print_each, &filled, &covered);
 
-        //if cur == Rock::Square {
-        //    break;
-        //}
         loop {
             let a = &air[air_pos];
             air_pos += 1;
@@ -181,15 +191,49 @@ fn main() -> Result<()> {
                 air_pos = 0;
             }
 
+            // We have 5 rocks and some airflow pattern that will eventually repeat a pattern.
+            // Technically there are many cycles contained in various places. We want a specific one.
+            // Even if the air flow vector is huge there's a limit since it only has 2 cases in it.
+            // So height grows less than the number of air moves we make.
+            //
+            // Assume if we've dropped 1000 rocks we're past the point where the original bottom
+            // (which is 100% covered) is not part of our period.
+            //
+            // At this point starting tracking Rock and the current position in the air vec.
+            // This will eventually repeat itself. Check if this is our cycle by seeing if
+            // the current iteration mod period equals total iterations mod period. If that's
+            // the case we have an integer number of periods to go which is easy to compute.
+            // By sliding around looking for this we eventually find the magic period which
+            // means the height at period start + (remaining periods * height diff) == total.
+            if i > 1000 {
+                let key = (cur.clone(), air_pos);
+                if tracked.contains_key(&key) {
+                    let v = tracked[&key];
+                    let period = i - v.0;
+                    if i % period == iterations % period {
+                        println!("period {period} detected iterations {i} - {}", v.0,);
+                        let h = highest - v.1;
+                        let remaining = iterations - i;
+                        let c = (remaining / period) + 1;
+                        return v.1 + (h * c);
+                    } else {
+                        //println!("bad period {period} at {i} - {}", v.0)
+                    }
+                } else {
+                    tracked.insert(key, (i, highest));
+                }
+            }
             // We don't care for the air direction if we moved or not.
             // Just make sure covered is accurate in case we did.
             check_move(a, &mut covered, &filled);
-            print_board(&filled.clone().union(&covered).cloned().collect());
+            print_board(print_each, &filled, &covered);
 
             // For moving down if it can't we know to build up.
             if !check_move(&Dir::Down, &mut covered, &filled) {
                 let mut max = 0;
-                filled = filled.union(&covered).cloned().collect();
+                for c in &covered {
+                    filled.insert(c.clone());
+                }
                 for n in filled.iter().filter_map(|l| {
                     if l.0 > 0 && l.0 < 8 && l.1 != 0 {
                         Some(l)
@@ -202,16 +246,12 @@ fn main() -> Result<()> {
                     }
                 }
                 highest = max;
-
-                println!("{i} - highest now: {highest}");
                 break;
             }
-            print_board(&filled.clone().union(&covered).cloned().collect());
+            print_board(print_each, &filled, &covered);
         }
     }
-
-    println!("highest: {highest}");
-    Ok(())
+    highest
 }
 
 fn check_move(a: &Dir, covered: &mut HashSet<Location>, filled: &HashSet<Location>) -> bool {
@@ -242,26 +282,29 @@ fn check_move(a: &Dir, covered: &mut HashSet<Location>, filled: &HashSet<Locatio
     to_move
 }
 
-fn print_board(filled: &HashSet<Location>) {
-    return;
-    let mut points = filled.iter().collect::<Vec<_>>();
-    points.sort();
-    let mut cury = usize::MAX;
-    let mut curx = usize::MIN;
-    for p in points.iter().cloned().rev() {
-        if p.1 < cury {
-            println!();
-            curx = 0;
-            cury = p.1;
-        }
-        if p.0 - curx > 1 {
-            for _ in curx..p.0 - 1 {
-                print!(" ");
+fn print_board(print: bool, filled: &HashSet<Location>, covered: &HashSet<Location>) {
+    if print {
+        let mut combined = filled.clone();
+        combined = combined.union(&covered).cloned().collect();
+        let mut points = combined.iter().collect::<Vec<_>>();
+        points.sort();
+        let mut cury = usize::MAX;
+        let mut curx = usize::MIN;
+        for p in points.iter().cloned().rev() {
+            if p.1 < cury {
+                println!();
+                curx = 0;
+                cury = p.1;
             }
+            if p.0 - curx > 1 {
+                for _ in curx..p.0 - 1 {
+                    print!(" ");
+                }
+            }
+            print!("#");
+            curx = p.0;
         }
-        print!("#");
-        curx = p.0;
+        println!();
+        println!();
     }
-    println!();
-    println!();
 }
