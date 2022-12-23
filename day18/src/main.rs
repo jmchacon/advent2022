@@ -35,9 +35,9 @@ fn main() -> Result<()> {
             i64::from_str_radix(parts[2], 10).unwrap(),
         ))
     }
-    let mut entries = HashSet::new();
+    let mut lava = HashSet::new();
     squares.iter().for_each(|v| {
-        entries.insert(v);
+        lava.insert(v.clone());
     });
     // If nothing touches we get 6 faces per square.
     let (mut maxx, mut maxy, mut maxz) = (i64::MIN, i64::MIN, i64::MIN);
@@ -67,21 +67,63 @@ fn main() -> Result<()> {
             faces -= touching(compare, &squares[j]);
         }
     }
-    let mut faces2 = faces;
-    for x in minx..=maxx {
-        for y in miny..=maxy {
-            for z in minz..=maxz {
-                let t = Location(x, y, z);
-                if !entries.contains(&t) {
-                    let mut sum = 0;
-                    for compare in &squares {
-                        sum += touching(&t, compare);
-                    }
-                    if sum == 12 {
-                        faces2 -= 6;
-                        println!("Trying {t:?} = {}", sum);
-                    }
-                }
+    // Make a bounding box one larger to surround this.
+    minx -= 1;
+    miny -= 1;
+    minz -= 1;
+    maxx += 1;
+    maxy += 1;
+    maxz += 1;
+
+    let mut choices = Vec::from([Location(minx, miny, minz)]);
+    let mut water = HashSet::new();
+    while choices.len() > 0 {
+        let cur = choices.pop().unwrap();
+        for dir in &[
+            Location(cur.0 + 1, cur.1, cur.2),
+            Location(cur.0 - 1, cur.1, cur.2),
+            Location(cur.0, cur.1 + 1, cur.2),
+            Location(cur.0, cur.1 - 1, cur.2),
+            Location(cur.0, cur.1, cur.2 + 1),
+            Location(cur.0, cur.1, cur.2 - 1),
+        ] {
+            // If this has lava we don't fill through it.
+            if lava.contains(dir) {
+                //println!("skipping {cur:?} because {dir:?} in lava");
+                continue;
+            }
+            // Outside box. Just skip.
+            if dir.0 < minx
+                || dir.0 > maxx
+                || dir.1 < miny
+                || dir.1 > maxy
+                || dir.2 < minz
+                || dir.2 > maxz
+            {
+                //println!("skipping {cur:?} because {dir:?} outside");
+                continue;
+            }
+
+            if !water.contains(dir) {
+                water.insert(dir.clone());
+                choices.push(dir.clone());
+            }
+        }
+    }
+
+    //println!("water: {water:?}");
+    let mut faces2 = 0;
+    for cur in &lava {
+        for dir in &[
+            Location(cur.0 + 1, cur.1, cur.2),
+            Location(cur.0 - 1, cur.1, cur.2),
+            Location(cur.0, cur.1 + 1, cur.2),
+            Location(cur.0, cur.1 - 1, cur.2),
+            Location(cur.0, cur.1, cur.2 + 1),
+            Location(cur.0, cur.1, cur.2 - 1),
+        ] {
+            if water.contains(dir) {
+                faces2 += 1;
             }
         }
     }
