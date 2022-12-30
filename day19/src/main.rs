@@ -148,7 +148,7 @@ fn build(
             };
 
     let (new_ore, new_clay, new_obsidion, new_geode) = (robots[0], robots[1], robots[2], robots[3]);
-    if rocks[0] >= geode_ore && rocks[2] >= geode_obs {
+    if turns > 1 && rocks[0] >= geode_ore && rocks[2] >= geode_obs {
         // Check geode robot first.
         choices.push(build(
             turns - 1,
@@ -163,7 +163,8 @@ fn build(
             [robots[0], robots[1], robots[2], robots[3] + 1],
         ));
     } else {
-        if rocks[0] >= obs_ore
+        if turns > 2
+            && rocks[0] >= obs_ore
             && rocks[1] >= obs_clay
             && robots[2] < geode_obs
             && (robots[2] * turns + rocks[2] < turns * geode_obs)
@@ -182,7 +183,8 @@ fn build(
                 [robots[0], robots[1], robots[2] + 1, robots[3]],
             ));
         }
-        if rocks[0] >= clay_ore
+        if turns > 6
+            && rocks[0] >= clay_ore
             && robots[1] < obs_clay
             && (robots[1] * turns + rocks[1] < turns * obs_clay)
         {
@@ -200,7 +202,8 @@ fn build(
                 [robots[0], robots[1] + 1, robots[2], robots[3]],
             ));
         }
-        if rocks[0] >= ore_ore
+        if turns > 2
+            && rocks[0] >= ore_ore
             && robots[0] < max_ore
             && (robots[0] * turns + rocks[0] < turns * max_ore)
         {
