@@ -2,7 +2,7 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -64,9 +64,8 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let rules = VecDeque::from([Facing::North, Facing::South, Facing::West, Facing::East]);
+    let rules = Vec::from([Facing::North, Facing::South, Facing::West, Facing::East]);
     let mut map = HashSet::new();
-
     for (line_num, line) in lines.iter().enumerate() {
         for (pos, c) in line.as_bytes().iter().enumerate() {
             match c {
@@ -82,14 +81,42 @@ fn main() -> Result<()> {
         }
     }
 
+    let orig = map.clone();
     print_board(0, &map);
 
-    let mut start_rule: usize = 0;
+    let rounds = run_rounds(args.rounds, &mut map, &rules);
+    let (mut minx, mut maxx, mut miny, mut maxy) = (i64::MAX, i64::MIN, i64::MAX, i64::MIN);
+    for m in &map {
+        if m.0 < minx {
+            minx = m.0;
+        }
+        if m.0 > maxx {
+            maxx = m.0;
+        }
+        if m.1 < miny {
+            miny = m.1;
+        }
+        if m.1 > maxy {
+            maxy = m.1;
+        }
+    }
+    println!("rounds = {rounds}");
+    println!("{minx}-{maxx} x {miny}-{maxy}");
+    let area = ((maxx - minx + 1) * (maxy - miny + 1)) - map.len() as i64;
+    println!("area = {area}");
 
-    for r in 0..args.rounds {
+    map = orig.clone();
+    let rounds = run_rounds(usize::MAX, &mut map, &rules);
+    println!("No movement on round {rounds}");
+    Ok(())
+}
+
+fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -> usize {
+    let mut start_rule = 0;
+    for r in 0..rounds {
         let mut proposed = HashMap::new();
         println!("Starting with rule {}", rules[start_rule]);
-        for l in &map {
+        for l in map.iter() {
             let mut has_neighbors = false;
             for tests in [
                 &Location(l.0 - 1, l.1),     // W
@@ -177,6 +204,9 @@ fn main() -> Result<()> {
             }
         }
 
+        if proposed.len() == 0 {
+            return r + 1;
+        }
         for p in &proposed {
             if p.1.len() == 1 {
                 map.remove(&p.1[0]);
@@ -187,25 +217,7 @@ fn main() -> Result<()> {
         start_rule %= rules.len();
         print_board(r + 1, &map);
     }
-    let (mut minx, mut maxx, mut miny, mut maxy) = (i64::MAX, i64::MIN, i64::MAX, i64::MIN);
-    for m in &map {
-        if m.0 < minx {
-            minx = m.0;
-        }
-        if m.0 > maxx {
-            maxx = m.0;
-        }
-        if m.1 < miny {
-            miny = m.1;
-        }
-        if m.1 > maxy {
-            maxy = m.1;
-        }
-    }
-    println!("{minx}-{maxx} x {miny}-{maxy}");
-    let area = ((maxx - minx + 1) * (maxy - miny + 1)) - map.len() as i64;
-    println!("area = {area}");
-    Ok(())
+    rounds
 }
 
 fn print_board(round: usize, map: &HashSet<Location>) {
