@@ -1,8 +1,6 @@
 //! day25 advent 2022
 use clap::Parser;
 use color_eyre::eyre::Result;
-use slab_tree::tree::TreeBuilder;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;

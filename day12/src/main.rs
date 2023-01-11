@@ -40,6 +40,7 @@ impl Location {
         v
     }
 }
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let args: Args = Args::parse();
