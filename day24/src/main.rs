@@ -163,38 +163,47 @@ fn main() -> Result<()> {
         boards.push(grid.clone());
     }
 
-    let len = bfs(&boards, &exp, &end);
+    let len = bfs(&boards, 0, &exp, &end);
     println!("cost is {len}");
+    let len = bfs(&boards, len, &end, &exp);
+    println!("cost2 is {len}");
+    let len = bfs(&boards, len, &exp, &end);
+    println!("cost3 is {len}");
+
     Ok(())
 }
 
-fn bfs(boards: &Vec<Vec<Vec<Spot>>>, start: &Location, dest: &Location) -> usize {
+fn bfs(boards: &Vec<Vec<Vec<Spot>>>, len: usize, start: &Location, dest: &Location) -> usize {
     let mut q = BinaryHeap::new();
     let mut seen = HashSet::new();
 
     // Use Reverse on the queue to turn this into a min based PQ. Otherwise
     // max based makes Dijkstra unhappy and won't terminate :)
-    q.push(Reverse((0, start.clone())));
+    q.push(Reverse((len, start.clone())));
 
     // We will backtrack but we can't repeat the same location/time
     // or else we'll loop.
-    seen.insert((0, start.clone()));
+    seen.insert((len, start.clone()));
 
     let lcm = boards.len();
     while let Some(e) = q.pop() {
         let loc = e.0 .1;
-        let cost = e.0 .0;
+        let len = e.0 .0;
         if loc == *dest {
-            return cost;
+            return len;
         }
-        let new = cost + 1;
+        let new = len + 1;
         let b = &boards[new % lcm];
 
-        // If we're at the start we can only go down or stay.
+        // If we're at the start we can only go up/down or stay.
         // Otherwise we can always tests N/S/E/W without worry as the walls
         // will be in the way and not under/overflow.
         let tests = if loc == *start {
-            Vec::from([loc.clone(), Location(loc.0, loc.1 + 1)])
+            if loc.1 == 0 {
+                Vec::from([loc.clone(), Location(loc.0, loc.1 + 1)])
+            } else {
+                Vec::from([loc.clone(), Location(loc.0, loc.1 - 1)])
+            }
         } else {
             let x = loc.0;
             let y = loc.1;
