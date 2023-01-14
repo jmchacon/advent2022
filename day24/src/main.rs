@@ -2,14 +2,15 @@
 use crate::{Facing::*, Spot::*, Storm::*};
 use clap::Parser;
 use color_eyre::eyre::Result;
+use grid::{Grid, Location};
 use num::integer::lcm;
-use std::cmp::{Ordering, Reverse};
+use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
-use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::path::Path;
+use std::{fmt, iter};
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -55,9 +56,10 @@ impl fmt::Display for Facing {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 enum Spot {
     Wall,
+    #[default]
     Path,
     Blizzard(Storm),
     Expedition,
@@ -74,35 +76,6 @@ impl fmt::Display for Spot {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct Location(usize, usize);
-
-impl Ord for Location {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // We want to sort by row, then column order.
-        // If we derive we get column/row instead unless we reverse
-        // the tuple.
-        let o = self.1.cmp(&other.1);
-        match o {
-            std::cmp::Ordering::Less => o,
-            std::cmp::Ordering::Equal => self.0.cmp(&other.0),
-            std::cmp::Ordering::Greater => o,
-        }
-    }
-}
-
-impl PartialOrd for Location {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl std::fmt::Display for Location {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({},{})", self.0, self.1)
-    }
-}
-
 fn main() -> Result<()> {
     color_eyre::install()?;
     let args: Args = Args::parse();
@@ -111,37 +84,38 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let mut grid = Vec::new();
+    let mut grid = Grid::<Spot>::new(lines[0].len(), lines.len());
+
     for (line_num, line) in lines.iter().enumerate() {
-        let mut g = Vec::new();
-        for b in line.as_bytes() {
+        for (pos, b) in line.as_bytes().iter().enumerate() {
+            let l = Location(pos, line_num);
             match b {
-                b'#' => g.push(Wall),
-                b'.' => g.push(Path),
-                b'>' => g.push(Blizzard(Single(East))),
-                b'<' => g.push(Blizzard(Single(West))),
-                b'^' => g.push(Blizzard(Single(North))),
-                b'v' => g.push(Blizzard(Single(South))),
+                b'#' => grid.add(&l, Wall),
+                b'.' => grid.add(&l, Path),
+                b'>' => grid.add(&l, Blizzard(Single(East))),
+                b'<' => grid.add(&l, Blizzard(Single(West))),
+                b'^' => grid.add(&l, Blizzard(Single(North))),
+                b'v' => grid.add(&l, Blizzard(Single(South))),
                 _ => panic!("{} - bad line {line}", line_num + 1),
-            }
+            };
         }
-        grid.push(g);
     }
 
     // Find the first open hole and put the expedition there.
     // Also find the end.
     let mut exp = Location(0, 0);
-    for (pos, g) in grid[0].iter().enumerate() {
-        if *g == Path {
-            exp.0 = pos;
+    for x in 0..grid.width() {
+        if *grid.get(&Location(x, 0)) == Path {
+            exp.0 = x;
             break;
         }
     }
 
-    let mut end = Location(0, grid.len() - 1);
-    for (pos, g) in grid[grid.len() - 1].iter().enumerate() {
-        if *g == Path {
-            end.0 = pos;
+    let last_row = grid.height() - 1;
+    let mut end = Location(0, last_row);
+    for x in 0..grid.width() {
+        if *grid.get(&Location(x, last_row)) == Path {
+            end.0 = x;
             break;
         }
     }
@@ -153,7 +127,7 @@ fn main() -> Result<()> {
 
     // Since the blizzard paths are symetric they simply repeat overall at the
     // lcm(width,length) of that field.
-    let lcm = lcm(grid.len() - 2, grid[0].len() - 2);
+    let lcm = lcm(grid.height() - 2, grid.width() - 2);
     println!("lcm {lcm}");
 
     // Use that lcm to generate all the boards we'd ever need for lookup
@@ -173,70 +147,62 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn bfs(boards: &Vec<Vec<Vec<Spot>>>, len: usize, start: &Location, dest: &Location) -> usize {
+fn bfs(boards: &Vec<Grid<Spot>>, len: usize, start: &Location, dest: &Location) -> usize {
     let mut q = BinaryHeap::new();
     let mut seen = HashSet::new();
 
     // Use Reverse on the queue to turn this into a min based PQ. Otherwise
-    // max based makes Dijkstra unhappy and won't terminate :)
-    q.push(Reverse((len, start.clone())));
+    // max based makes Dijkstra sad :)
+    q.push(Reverse((len, start.distance(dest), start.clone())));
 
-    // We will backtrack but we can't repeat the same location/time
+    // We will backtrack but we can't repeat the same location+path length
     // or else we'll loop.
     seen.insert((len, start.clone()));
 
     let lcm = boards.len();
     while let Some(e) = q.pop() {
-        let loc = e.0 .1;
-        let len = e.0 .0;
+        let path_len = e.0 .0;
+        // Distance is e.1 but we don't need it to compute anything.
+        // It's in there so sorting for the queue uses it (a star).
+        let loc = e.0 .2;
         if loc == *dest {
-            return len;
+            return path_len;
         }
-        let new = len + 1;
+        let new = path_len + 1;
         let b = &boards[new % lcm];
 
-        // If we're at the start we can only go up/down or stay.
-        // Otherwise we can always tests N/S/E/W without worry as the walls
-        // will be in the way and not under/overflow.
-        let tests = if loc == *start {
-            if loc.1 == 0 {
-                Vec::from([loc.clone(), Location(loc.0, loc.1 + 1)])
-            } else {
-                Vec::from([loc.clone(), Location(loc.0, loc.1 - 1)])
-            }
-        } else {
-            let x = loc.0;
-            let y = loc.1;
-            Vec::from([
-                loc.clone(),
-                Location(x + 1, y),
-                Location(x - 1, y),
-                Location(x, y + 1),
-                Location(x, y - 1),
-            ])
-        };
+        // If we're at the edge then neighbors() will filter for us.
+        // Then all that remains is removing walls.
+        let neighbors = b
+            .neighbors(&loc)
+            .iter()
+            .chain(iter::once(&(loc.clone(), &Expedition))) // Add the current location in also as we might just wait
+            .filter(|x| *x.1 != Wall)
+            .cloned()
+            .collect::<Vec<(Location, &Spot)>>();
 
-        for t in &tests {
+        for t in &neighbors {
             // Only attempt places that have paths as everything else
             // is either a wall or blizzard.
-            if b[t.1][t.0] == Path {
-                if seen.insert((new, t.clone())) {
-                    q.push(Reverse((new, t.clone())));
+            if *b.get(&t.0) == Path {
+                if seen.insert((new, t.0.clone())) {
+                    q.push(Reverse((new, t.0.distance(dest), t.0.clone())));
                 }
             }
         }
     }
 
+    // Somehow didn't find the dest...
     usize::MAX
 }
 
-fn print_board(grid: &Vec<Vec<Spot>>, exp: &Location) {
-    for (y, spots) in grid.iter().enumerate() {
-        for (x, spot) in spots.iter().enumerate() {
+fn print_board(grid: &Grid<Spot>, exp: &Location) {
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
             let spot = if Location(x, y) == *exp {
                 &Expedition
             } else {
-                spot
+                grid.get(&Location(x, y))
             };
 
             print!("{spot}");
@@ -245,29 +211,29 @@ fn print_board(grid: &Vec<Vec<Spot>>, exp: &Location) {
     }
 }
 
-fn move_blizzard(grid: &mut Vec<Vec<Spot>>) {
+fn move_blizzard(grid: &mut Grid<Spot>) {
     // We know this is an interior grid except the start and end holes
     // but there are no blizzards going N/S on the first/last row so those will
     // never get hit.
     let mut newgrid = grid.clone();
     // Create a copy we zero out and start moving into.
     // We'll clone this back into grid when we're done.
-    for y in 0..grid.len() - 1 {
-        for x in 0..grid[0].len() - 1 {
-            if newgrid[y][x] != Wall {
-                newgrid[y][x] = Path;
+    for y in 0..grid.height() - 1 {
+        for x in 0..grid.width() - 1 {
+            if *newgrid.get(&Location(x, y)) != Wall {
+                newgrid.add(&Location(x, y), Path);
             }
         }
     }
 
-    for y in 0..grid.len() - 1 {
-        for x in 0..grid[0].len() - 1 {
-            if let Blizzard(b) = &grid[y][x] {
+    for y in 0..grid.height() - 1 {
+        for x in 0..grid.width() - 1 {
+            if let Blizzard(b) = grid.get(&Location(x, y)) {
                 match b {
-                    Single(s) => do_move(&mut newgrid, s, x, y),
+                    Single(s) => do_move(&mut newgrid, &s, x, y),
                     Multiple(m) => {
                         for loc in m {
-                            do_move(&mut newgrid, loc, x, y);
+                            do_move(&mut newgrid, &loc, x, y);
                         }
                     }
                 }
@@ -278,44 +244,47 @@ fn move_blizzard(grid: &mut Vec<Vec<Spot>>) {
     *grid = newgrid.clone();
 }
 
-fn do_move(newgrid: &mut Vec<Vec<Spot>>, s: &Facing, x: usize, y: usize) {
+fn do_move(newgrid: &mut Grid<Spot>, s: &Facing, x: usize, y: usize) {
     let new = match s {
         North => {
             let mut new = Location(x, y - 1);
-            if newgrid[y - 1][x] == Wall {
-                new = Location(x, newgrid.len() - 2);
+            if *newgrid.get(&new) == Wall {
+                new = Location(x, newgrid.height() - 2);
             }
             new
         }
         South => {
             let mut new = Location(x, y + 1);
-            if newgrid[y + 1][x] == Wall {
+            if *newgrid.get(&new) == Wall {
                 new = Location(x, 1);
             }
             new
         }
         East => {
             let mut new = Location(x + 1, y);
-            if newgrid[y][x + 1] == Wall {
+            if *newgrid.get(&new) == Wall {
                 new = Location(1, y);
             }
             new
         }
         West => {
             let mut new = Location(x - 1, y);
-            if newgrid[y][x - 1] == Wall {
-                new = Location(newgrid[0].len() - 2, y);
+            if *newgrid.get(&new) == Wall {
+                new = Location(newgrid.width() - 2, y);
             }
             new
         }
     };
-    match &mut newgrid[new.1][new.0] {
+    match newgrid.get_mut(&new) {
         Wall => panic!(),
-        Spot::Path => newgrid[new.1][new.0] = Blizzard(Single(s.clone())),
+        Spot::Path => newgrid.add(&new, Blizzard(Single(s.clone()))),
 
         Blizzard(b) => match b {
             Single(single) => {
-                newgrid[new.1][new.0] = Blizzard(Multiple(Vec::from([single.clone(), s.clone()])))
+                // Have to move it here as inside of Vec::from it claims we're borrowing
+                // twice.
+                let new_facing = single.clone();
+                newgrid.add(&new, Blizzard(Multiple(Vec::from([new_facing, s.clone()]))));
             }
             Multiple(v) => v.push(s.clone()),
         },

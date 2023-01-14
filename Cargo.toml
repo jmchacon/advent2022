@@ -65,6 +65,7 @@ clap = { version = "~4.0", features = ["derive", "wrap_help"] }
 color-eyre = { version = "0.6.2", default-features = false }
 strum = "0.24.1"
 strum_macros = "0.24.1"
+grid = { path = "../advent/grid" }
 
 [workspace.package]
 edition = "2021"
