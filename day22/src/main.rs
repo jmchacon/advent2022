@@ -14,6 +14,9 @@ struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
 
+    #[arg(long, default_value_t = false)]
+    debug: bool,
+
     #[arg(long, default_value_t = 50)]
     width: usize,
 
@@ -59,15 +62,8 @@ struct Block {
     transforms: HashMap<Facing, (usize, Facing)>,
 }
 
-fn main() -> Result<()> {
-    color_eyre::install()?;
-    let args: Args = Args::parse();
-
-    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join(args.filename);
-    let file = File::open(filename)?;
-    let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
-
-    let (corners, width) = match args.corners {
+fn corners(corners: usize) -> ([Location; 6], usize) {
+    match corners {
         1 => (
             [
                 Location(50, 0),
@@ -91,14 +87,26 @@ fn main() -> Result<()> {
             4,
         ),
         _ => panic!(),
-    };
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn main() -> Result<()> {
+    color_eyre::install()?;
+    let args: Args = Args::parse();
+
+    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join(args.filename);
+    let file = File::open(filename)?;
+    let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
+
+    let (corners, width) = corners(args.corners);
     let mut forest = Vec::new();
     let mut forest_done = false;
     let mut path = "";
     let mut moves = Vec::new();
     let mut max = 0;
     for (line_num, line) in lines.iter().enumerate() {
-        if line.len() == 0 {
+        if line.is_empty() {
             forest_done = true;
             continue;
         }
@@ -109,7 +117,7 @@ fn main() -> Result<()> {
                 match c {
                     b'0' | b'1' | b'2' | b'3' | b'4' | b'5' | b'6' | b'7' | b'8' | b'9' => {}
                     b'R' | b'L' => {
-                        let m = usize::from_str_radix(&line[start..pos], 10).unwrap();
+                        let m = line[start..pos].parse::<usize>()?;
                         start = pos + 1;
                         moves.push(Move::Steps(m));
                         if c == b'R' {
@@ -123,7 +131,7 @@ fn main() -> Result<()> {
             }
             // Get any trailing number.
             if start != line.len() {
-                let m = usize::from_str_radix(&line[start..line.len()], 10).unwrap();
+                let m = line[start..line.len()].parse::<usize>()?;
                 moves.push(Move::Steps(m));
             }
             break;
@@ -435,27 +443,30 @@ fn main() -> Result<()> {
         blocks2.push(b2);
     }
 
-    for f in &forest {
-        println!("{f:?}");
-    }
-    for (pos, b) in blocks.iter().enumerate() {
-        println!("block {pos}");
-        println!("corner: {}", b.corner);
-        for f in &b.forest {
+    if args.debug {
+        for f in &forest {
             println!("{f:?}");
         }
-    }
-    for (pos, b) in blocks2.iter().enumerate() {
-        println!("block2 {pos}");
-        println!("corner: {}", b.corner);
-        for f in &b.forest {
-            println!("{f:?}");
+        for (pos, b) in blocks.iter().enumerate() {
+            println!("block {pos}");
+            println!("corner: {}", b.corner);
+            for f in &b.forest {
+                println!("{f:?}");
+            }
         }
-    }
+        for (pos, b) in blocks2.iter().enumerate() {
+            println!("block2 {pos}");
+            println!("corner: {}", b.corner);
+            for f in &b.forest {
+                println!("{f:?}");
+            }
+        }
 
-    println!("{path}");
-    for m in &moves {
-        println!("{m:?}");
+        println!("{path}");
+
+        for m in &moves {
+            println!("{m:?}");
+        }
     }
 
     let facing = Facing::East;
@@ -466,11 +477,15 @@ fn main() -> Result<()> {
             break;
         }
     }
-    println!("starting at {loc:?} facing {facing}");
-    let (loc, block_num, facing) = compute_path(&moves, &blocks);
+    if args.debug {
+        println!("starting at {loc:?} facing {facing}");
+    }
+    let (loc, block_num, facing) = compute_path(&moves, &blocks, args.debug);
     let b = &blocks2[block_num];
-    println!("Block {block_num} at location {loc} facing {facing}");
-    println!("{}", b.corner);
+    if args.debug {
+        println!("Block {block_num} at location {loc} facing {facing}");
+        println!("{}", b.corner);
+    }
 
     let f: usize = match facing {
         Facing::North => 3,
@@ -480,10 +495,12 @@ fn main() -> Result<()> {
     };
     let part1 = 1000 * (b.corner.1 + loc.1 + 1) + 4 * (b.corner.0 + loc.0 + 1) + f;
 
-    let (loc, block_num, facing) = compute_path(&moves, &blocks2);
+    let (loc, block_num, facing) = compute_path(&moves, &blocks2, args.debug);
     let b = &blocks2[block_num];
-    println!("Block {block_num} at location {loc} facing {facing}");
-    println!("{}", b.corner);
+    if args.debug {
+        println!("Block {block_num} at location {loc} facing {facing}");
+        println!("{}", b.corner);
+    }
     let f: usize = match facing {
         Facing::North => 3,
         Facing::South => 1,
@@ -491,13 +508,16 @@ fn main() -> Result<()> {
         Facing::West => 2,
     };
     let part2 = 1000 * (b.corner.1 + loc.1 + 1) + 4 * (b.corner.0 + loc.0 + 1) + f;
-    println!();
-    println!("part1 {part1}");
-    println!("part2 {part2}");
+    if args.debug {
+        println!();
+    }
+    println!("part1 - {part1}");
+    println!("part2 - {part2}");
     Ok(())
 }
 
-fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Facing) {
+#[allow(clippy::too_many_lines)]
+fn compute_path(moves: &Vec<Move>, blocks: &[Block], debug: bool) -> (Location, usize, Facing) {
     let mut block_num = 0;
     let mut b = &blocks[block_num];
     let mut loc = Location(0, 0);
@@ -510,21 +530,16 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
         }
     }
     let loc2 = (b.corner.0 + loc.0, b.corner.1 + loc.1);
-    println!("Now facing {facing} at {loc2:?} in block {}", block_num + 1);
+    if debug {
+        println!("Now facing {facing} at {loc2:?} in block {}", block_num + 1);
+    }
     for m in moves {
         match m {
             Move::Steps(s) => {
                 for _ in 0..*s {
                     loc = match &facing {
                         Facing::North => {
-                            // Easy..we aren't going off the block so just test for a wall.
-                            if loc.1 != 0 {
-                                if b.forest[loc.1 - 1][loc.0] == Forest::Path {
-                                    Location(loc.0, loc.1 - 1)
-                                } else {
-                                    loc
-                                }
-                            } else {
+                            if loc.1 == 0 {
                                 // Otherwise find the block and new facing we might need.
                                 let next = b.transforms.get(&facing).unwrap();
                                 // If we're at the same facing, easy. Just check for path and if it works
@@ -555,13 +570,13 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                         }
                                         Facing::West => {
                                             // N -> W is x = right edge, y = old x
-                                            let newx = edge;
-                                            let newy = loc.0;
-                                            if blocks[next.0].forest[newy][newx] == Forest::Path {
+                                            let new_x = edge;
+                                            let new_y = loc.0;
+                                            if blocks[next.0].forest[new_y][new_x] == Forest::Path {
                                                 b = &blocks[next.0];
                                                 block_num = next.0;
                                                 facing = next.1.clone();
-                                                Location(newx, newy)
+                                                Location(new_x, new_y)
                                             } else {
                                                 loc
                                             }
@@ -578,20 +593,17 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                                 loc
                                             }
                                         }
-                                        _ => panic!(),
+                                        &Facing::North => panic!(),
                                     }
                                 }
+                            } else if b.forest[loc.1 - 1][loc.0] == Forest::Path {
+                                Location(loc.0, loc.1 - 1)
+                            } else {
+                                loc
                             }
                         }
                         Facing::South => {
-                            // Easy..we aren't going off the block so just test for a wall.
-                            if loc.1 != edge {
-                                if b.forest[loc.1 + 1][loc.0] == Forest::Path {
-                                    Location(loc.0, loc.1 + 1)
-                                } else {
-                                    loc
-                                }
-                            } else {
+                            if loc.1 == edge {
                                 // Otherwise find the block and new facing we might need.
                                 let next = b.transforms.get(&facing).unwrap();
                                 // If we're at the same facing, easy. Just check for path and if it works
@@ -622,13 +634,13 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                         }
                                         Facing::West => {
                                             // S -> W is x = right edge, y = old x
-                                            let newx = edge;
-                                            let newy = loc.0;
-                                            if blocks[next.0].forest[newy][newx] == Forest::Path {
+                                            let new_x = edge;
+                                            let new_y = loc.0;
+                                            if blocks[next.0].forest[new_y][new_x] == Forest::Path {
                                                 b = &blocks[next.0];
                                                 block_num = next.0;
                                                 facing = next.1.clone();
-                                                Location(newx, newy)
+                                                Location(new_x, new_y)
                                             } else {
                                                 loc
                                             }
@@ -645,20 +657,20 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                                 loc
                                             }
                                         }
-                                        _ => panic!(),
+                                        &Facing::South => panic!(),
                                     }
+                                }
+                            } else {
+                                // Easy..we aren't going off the block so just test for a wall.
+                                if b.forest[loc.1 + 1][loc.0] == Forest::Path {
+                                    Location(loc.0, loc.1 + 1)
+                                } else {
+                                    loc
                                 }
                             }
                         }
                         Facing::East => {
-                            // Easy..we aren't going off the block so just test for a wall.
-                            if loc.0 != edge {
-                                if b.forest[loc.1][loc.0 + 1] == Forest::Path {
-                                    Location(loc.0 + 1, loc.1)
-                                } else {
-                                    loc
-                                }
-                            } else {
+                            if loc.0 == edge {
                                 // Otherwise find the block and new facing we might need.
                                 let next = b.transforms.get(&facing).unwrap();
                                 // If we're at the same facing, easy. Just check for path and if it works
@@ -676,13 +688,13 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                     match &next.1 {
                                         Facing::North => {
                                             // E -> N is x = oldy, y = bottom
-                                            let newx = loc.1;
-                                            let newy = edge;
-                                            if blocks[next.0].forest[newy][newx] == Forest::Path {
+                                            let new_x = loc.1;
+                                            let new_y = edge;
+                                            if blocks[next.0].forest[new_y][new_x] == Forest::Path {
                                                 b = &blocks[next.0];
                                                 block_num = next.0;
                                                 facing = next.1.clone();
-                                                Location(newx, newy)
+                                                Location(new_x, new_y)
                                             } else {
                                                 loc
                                             }
@@ -711,20 +723,20 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                                 loc
                                             }
                                         }
-                                        _ => panic!(),
+                                        &Facing::East => panic!(),
                                     }
+                                }
+                            } else {
+                                // Easy..we aren't going off the block so just test for a wall.
+                                if b.forest[loc.1][loc.0 + 1] == Forest::Path {
+                                    Location(loc.0 + 1, loc.1)
+                                } else {
+                                    loc
                                 }
                             }
                         }
                         Facing::West => {
-                            // Easy..we aren't going off the block so just test for a wall.
-                            if loc.0 != 0 {
-                                if b.forest[loc.1][loc.0 - 1] == Forest::Path {
-                                    Location(loc.0 - 1, loc.1)
-                                } else {
-                                    loc
-                                }
-                            } else {
+                            if loc.0 == 0 {
                                 // Otherwise find the block and new facing we might need.
                                 let next = b.transforms.get(&facing).unwrap();
                                 // If we're at the same facing, easy. Just check for path and if it works
@@ -742,13 +754,13 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                     match &next.1 {
                                         Facing::North => {
                                             // W -> N is x = oldy, y = bottom
-                                            let newx = loc.1;
-                                            let newy = edge;
-                                            if blocks[next.0].forest[newy][newx] == Forest::Path {
+                                            let new_x = loc.1;
+                                            let new_y = edge;
+                                            if blocks[next.0].forest[new_y][new_x] == Forest::Path {
                                                 b = &blocks[next.0];
                                                 block_num = next.0;
                                                 facing = next.1.clone();
-                                                Location(newx, newy)
+                                                Location(new_x, new_y)
                                             } else {
                                                 loc
                                             }
@@ -777,8 +789,15 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
                                                 loc
                                             }
                                         }
-                                        _ => panic!(),
+                                        &Facing::West => panic!(),
                                     }
+                                }
+                            } else {
+                                // Easy..we aren't going off the block so just test for a wall.
+                                if b.forest[loc.1][loc.0 - 1] == Forest::Path {
+                                    Location(loc.0 - 1, loc.1)
+                                } else {
+                                    loc
                                 }
                             }
                         }
@@ -803,10 +822,12 @@ fn compute_path(moves: &Vec<Move>, blocks: &Vec<Block>) -> (Location, usize, Fac
             }
         }
         let loc2 = (b.corner.0 + loc.0, b.corner.1 + loc.1);
-        println!(
-            "Now facing {facing} at {loc2:?} ({loc:?}) in block {}",
-            block_num + 1
-        );
+        if debug {
+            println!(
+                "Now facing {facing} at {loc2:?} ({loc:?}) in block {}",
+                block_num + 1
+            );
+        }
     }
     (loc, block_num, facing)
 }

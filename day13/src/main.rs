@@ -14,6 +14,9 @@ use strum_macros::{Display, EnumString};
 struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 }
 
 #[derive(Clone, Debug, Display, EnumString)]
@@ -24,7 +27,7 @@ enum Entry {
 
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> Ordering {
-        compare(&self, &other)
+        compare(self, other)
     }
 }
 
@@ -52,7 +55,7 @@ fn main() -> Result<()> {
 
     let mut entries = Vec::new();
     for line in lines {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -60,20 +63,24 @@ fn main() -> Result<()> {
 
         // Line always starts as a list
         let mut c: usize = 1;
-        entries.push(parse_list(b, &mut c));
+        let r = parse_list(b, &mut c)?;
+        entries.push(r);
     }
-    for e in &entries {
-        println!("{e:?}");
+    if args.debug {
+        for e in &entries {
+            println!("{e:?}");
+        }
     }
-
     let mut entries2 = entries.clone();
     let two = Entry::List(vec![Entry::Val(2)]);
     let six = Entry::List(vec![Entry::Val(6)]);
     entries2.push(Entry::List(vec![two.clone()]));
     entries2.push(Entry::List(vec![six.clone()]));
-    println!("\nentries2");
+    if args.debug {
+        println!("\nentries2");
+    }
     entries2.sort();
-    let (mut ind1, mut ind2) = (0 as usize, 0 as usize);
+    let (mut ind1, mut ind2) = (0, 0);
     for (i, e) in entries2.iter().enumerate() {
         if e == &two {
             ind1 = i + 1;
@@ -81,7 +88,9 @@ fn main() -> Result<()> {
         if e == &six {
             ind2 = i + 1;
         }
-        println!("{e:?}");
+        if args.debug {
+            println!("{e:?}");
+        }
     }
 
     let mut pos = 0;
@@ -95,9 +104,11 @@ fn main() -> Result<()> {
         }
         pos += 2;
     }
-    println!("good - {good:?}");
-    println!("sum - {}", good.iter().sum::<usize>());
-    println!("2 * 6 = {}", ind1 * ind2);
+    if args.debug {
+        println!("good - {good:?}");
+    }
+    println!("part1 - {}", good.iter().sum::<usize>());
+    println!("part2 - 2 * 6 = {}", ind1 * ind2);
     Ok(())
 }
 
@@ -106,37 +117,33 @@ fn compare(entry1: &Entry, entry2: &Entry) -> Ordering {
         (Entry::Val(_), Entry::Val(_)) => {
             panic!("can't get here");
         }
-        (Entry::Val(_), Entry::List(_)) => {
-            return compare(&Entry::List(vec![entry1.clone()]), entry2);
-        }
-        (Entry::List(_), Entry::Val(_)) => {
-            return compare(entry1, &Entry::List(vec![entry2.clone()]));
-        }
+        (Entry::Val(_), Entry::List(_)) => compare(&Entry::List(vec![entry1.clone()]), entry2),
+        (Entry::List(_), Entry::Val(_)) => compare(entry1, &Entry::List(vec![entry2.clone()])),
         (Entry::List(a), Entry::List(b)) => {
             let mut aa = a.iter();
             let mut bb = b.iter();
 
-            if a.len() == 0 && b.len() == 0 {
+            if a.is_empty() && b.is_empty() {
                 return Ordering::Equal;
             }
             loop {
-                let nexta = aa.next();
-                let nextb = bb.next();
+                let na = aa.next();
+                let nb = bb.next();
                 // If they both go empty together this is equality, not left running out first.
-                if nexta.is_none() && nextb.is_none() {
+                if na.is_none() && nb.is_none() {
                     return Ordering::Equal;
                 }
                 // Left side running out is fine.
-                if nexta.is_none() {
+                if na.is_none() {
                     return Ordering::Less;
                 }
                 // 2nd one running out is bad.
-                if nextb.is_none() {
+                if nb.is_none() {
                     return Ordering::Greater;
                 }
-                let nexta = nexta.unwrap();
-                let nextb = nextb.unwrap();
-                if let (Entry::Val(compa), Entry::Val(compb)) = (nexta, nextb) {
+                let na = na.unwrap();
+                let nb = nb.unwrap();
+                if let (Entry::Val(compa), Entry::Val(compb)) = (na, nb) {
                     if compa > compb {
                         return Ordering::Greater;
                     }
@@ -144,7 +151,7 @@ fn compare(entry1: &Entry, entry2: &Entry) -> Ordering {
                         return Ordering::Less;
                     }
                 } else {
-                    let ret = compare(nexta, nextb);
+                    let ret = compare(na, nb);
                     if ret != Ordering::Equal {
                         return ret;
                     }
@@ -154,7 +161,7 @@ fn compare(entry1: &Entry, entry2: &Entry) -> Ordering {
     }
 }
 
-fn parse_list(b: &[u8], c: &mut usize) -> Entry {
+fn parse_list(b: &[u8], c: &mut usize) -> Result<Entry> {
     let mut entry = Vec::new();
     let mut start = None;
     loop {
@@ -164,14 +171,14 @@ fn parse_list(b: &[u8], c: &mut usize) -> Entry {
         match b[*c] {
             b'[' => {
                 *c += 1;
-                let e = parse_list(b, c);
+                let e = parse_list(b, c)?;
                 entry.push(e);
             }
             // At the top level comma's are just skipped.
             b',' | b']' => {
                 if let Some(s) = start {
-                    let sub = str::from_utf8(&b[s..*c]).unwrap();
-                    let val = i32::from_str_radix(sub, 10).unwrap();
+                    let sub = str::from_utf8(&b[s..*c])?;
+                    let val = sub.parse::<i32>()?;
                     entry.push(Entry::Val(val));
                     start = None;
                 }
@@ -187,5 +194,5 @@ fn parse_list(b: &[u8], c: &mut usize) -> Entry {
         }
         *c += 1;
     }
-    Entry::List(entry)
+    Ok(Entry::List(entry))
 }

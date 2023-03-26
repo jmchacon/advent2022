@@ -13,6 +13,9 @@ struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
 
+    #[arg(long, default_value_t = false)]
+    debug: bool,
+
     #[arg(long, default_value_t = 24)]
     turns: usize,
 
@@ -43,19 +46,13 @@ fn main() -> Result<()> {
 
         let mut entry = Vec::new();
 
-        let ore = Robot::Ore(usize::from_str_radix(parts[6], 10).unwrap());
+        let ore = Robot::Ore(parts[6].parse::<usize>()?);
         entry.push(ore);
-        let clay = Robot::Clay(usize::from_str_radix(parts[12], 10).unwrap());
+        let clay = Robot::Clay(parts[12].parse::<usize>()?);
         entry.push(clay);
-        let obsidion = Robot::Obsidion(
-            usize::from_str_radix(parts[18], 10).unwrap(),
-            usize::from_str_radix(parts[21], 10).unwrap(),
-        );
+        let obsidion = Robot::Obsidion(parts[18].parse::<usize>()?, parts[21].parse::<usize>()?);
         entry.push(obsidion);
-        let geode = Robot::Geode(
-            usize::from_str_radix(parts[27], 10).unwrap(),
-            usize::from_str_radix(parts[30], 10).unwrap(),
-        );
+        let geode = Robot::Geode(parts[27].parse::<usize>()?, parts[30].parse::<usize>()?);
         entry.push(geode);
         blueprints.push(entry);
     }
@@ -67,21 +64,14 @@ fn main() -> Result<()> {
         let mut max_ore = 0;
         for r in b {
             match r {
-                Robot::Ore(o) => {
-                    max_ore = max_ore.max(*o);
-                }
-                Robot::Clay(o) => {
-                    max_ore = max_ore.max(*o);
-                }
-                Robot::Obsidion(o, _) => {
-                    max_ore = max_ore.max(*o);
-                }
-                Robot::Geode(o, _) => {
+                Robot::Ore(o) | Robot::Clay(o) | Robot::Obsidion(o, _) | Robot::Geode(o, _) => {
                     max_ore = max_ore.max(*o);
                 }
             }
         }
-        println!("{b:?} - {max_ore}");
+        if args.debug {
+            println!("{b:?} - {max_ore}");
+        }
         max_ores.push(max_ore);
     }
     for i in 0..blueprints.len() {
@@ -92,14 +82,16 @@ fn main() -> Result<()> {
             [0, 0, 0, 0],
             [1, 0, 0, 0],
         );
-        println!("{:?} quality - {q}", blueprints[i]);
+        if args.debug {
+            println!("{:?} quality - {q}", blueprints[i]);
+        }
         quality.push(q);
     }
     let mut sum = 0;
-    for i in 0..quality.len() {
-        sum += (i + 1) * quality[i];
+    for (i, v) in quality.iter().enumerate() {
+        sum += (i + 1) * v;
     }
-    println!("sum - {sum}");
+    println!("part1 - {sum}");
 
     quality.clear();
     for i in 0..3.min(blueprints.len()) {
@@ -110,14 +102,16 @@ fn main() -> Result<()> {
             [0, 0, 0, 0],
             [1, 0, 0, 0],
         );
-        println!("{:?} quality - {q}", blueprints[i]);
+        if args.debug {
+            println!("{:?} quality - {q}", blueprints[i]);
+        }
         quality.push(q);
     }
     sum = 1;
     for i in quality {
         sum *= i;
     }
-    println!("sum2 - {sum}");
+    println!("part2 - {sum}");
     Ok(())
 }
 
@@ -132,21 +126,11 @@ fn build(
     if turns == 0 {
         return rocks[3];
     }
-    //println!("{turns} - {rocks:?} {robots:?}");
     let mut choices = Vec::new();
-    let Robot::Ore(ore_ore) = blueprint[0] else {
-                panic!("not ore");
-            };
-    let Robot::Clay(clay_ore)= blueprint[1] else {
-                panic!("not clay");
-            };
-    let Robot::Obsidion(obs_ore, obs_clay) = blueprint[2] else {
-                panic!("not obsidion");
-            };
-    let Robot::Geode(geode_ore, geode_obs) = blueprint[3] else {
-                panic!("not geode");
-            };
-
+    let Robot::Ore(ore_ore) = blueprint[0] else { panic!()};
+    let Robot::Clay(clay_ore) = blueprint[1] else { panic!()};
+    let Robot::Obsidion(obs_ore, obs_clay) = blueprint[2] else {panic!()};
+    let Robot::Geode(geode_ore, geode_obs) = blueprint[3] else {panic!()};
     let (new_ore, new_clay, new_obsidion, new_geode) = (robots[0], robots[1], robots[2], robots[3]);
     if turns > 1 && rocks[0] >= geode_ore && rocks[2] >= geode_obs {
         // Check geode robot first.

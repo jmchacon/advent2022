@@ -6,5 +6,10 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+clap = { workspace = true }
 color-eyre = { workspace = true }
-slab_tree = "0.3.2"
+slab_tree = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+itertools = { workspace = true }
+grid = { workspace = true }

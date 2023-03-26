@@ -1,4 +1,5 @@
 //! day9 advent 2022
+use clap::Parser;
 use color_eyre::eyre::Result;
 use std::collections::HashSet;
 use std::fs::File;
@@ -6,6 +7,16 @@ use std::io;
 use std::io::BufRead;
 use std::path::Path;
 use strum_macros::{Display, EnumString};
+
+#[derive(Parser)]
+#[command(author, version, about)]
+struct Args {
+    #[arg(long, default_value_t = String::from("input.txt"))]
+    filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
+}
 
 #[derive(Debug, Display, EnumString)]
 enum Moves {
@@ -35,340 +46,218 @@ enum Adjacent {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct Location(i32, i32);
 
-const SIZE: usize = 9;
-const TAIL: usize = SIZE - 1;
+const PART1: usize = 1;
+const PART2: usize = 9;
 
 fn main() -> Result<()> {
-    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join("input.txt");
+    color_eyre::install()?;
+    let args: Args = Args::parse();
+
+    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join(args.filename);
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let mut hm = HashSet::new();
-    let mut cur = Vec::new();
-    let mut adj = Vec::new();
-    // Add an extra so we can overflow setup in recursion later w/o panic.
-    // slight memory usage.
-    for _ in 0..=SIZE {
-        adj.push(Adjacent::On);
-        cur.push(Location(0, 0));
-    }
-    hm.insert(cur[TAIL].clone());
-
-    for (line_num, line) in lines.iter().enumerate() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        assert!(parts.len() == 2, "{} - bad line {line}", line_num + 1);
-        let dir = match parts[0].as_bytes() {
-            b"R" => Moves::R,
-            b"U" => Moves::U,
-            b"L" => Moves::L,
-            b"D" => Moves::D,
-            _ => {
-                panic!("{} - bad line {line}", line_num + 1);
-            }
-        };
-        let moves = usize::from_str_radix(parts[1], 10).unwrap();
-        for _ in 0..moves {
-            process(0, &mut adj, &dir, &mut cur);
-            println!("{line} - {:?} {:?}", adj, cur);
-            hm.insert(cur[TAIL].clone());
+    for (pos, (size, tail)) in [(PART1, PART1 - 1), (PART2, PART2 - 1)].iter().enumerate() {
+        let mut hm = HashSet::new();
+        let mut cur = Vec::new();
+        let mut adj = Vec::new();
+        // Add an extra so we can overflow setup in recursion later w/o panic.
+        // slight memory usage.
+        for _ in 0..=*size {
+            adj.push(Adjacent::On);
+            cur.push(Location(0, 0));
         }
+        hm.insert(cur[*tail].clone());
+
+        for (line_num, line) in lines.iter().enumerate() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            assert!(parts.len() == 2, "{} - bad line {line}", line_num + 1);
+            let dir = match parts[0].as_bytes() {
+                b"R" => Moves::R,
+                b"U" => Moves::U,
+                b"L" => Moves::L,
+                b"D" => Moves::D,
+                _ => {
+                    panic!("{} - bad line {line}", line_num + 1);
+                }
+            };
+            let moves = parts[1].parse::<usize>()?;
+            for _ in 0..moves {
+                process(0, &mut adj, &dir, &mut cur, *tail);
+                if args.debug {
+                    println!("{line} - {adj:?} {cur:?}");
+                }
+                hm.insert(cur[*tail].clone());
+            }
+        }
+        println!("part{}: {}", pos + 1, hm.len());
     }
-    println!("moves: {}", hm.len());
     Ok(())
 }
 
-fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Location>) {
-    if i > TAIL {
+#[allow(clippy::too_many_lines)]
+fn process(i: usize, adj: &mut Vec<Adjacent>, dir: &Moves, cur: &mut Vec<Location>, tail: usize) {
+    if i > tail {
         return;
     }
     match (&adj[i], dir) {
-        (Adjacent::On, Moves::R) => {
-            adj[i] = Adjacent::W;
-        }
-        (Adjacent::On, Moves::L) => {
+        (Adjacent::On, Moves::L)
+        | (Adjacent::S, Moves::SW)
+        | (Adjacent::N, Moves::NW)
+        | (Adjacent::SE, Moves::D)
+        | (Adjacent::NE, Moves::U) => {
             adj[i] = Adjacent::E;
         }
-        (Adjacent::On, Moves::U) => {
+        (Adjacent::On, Moves::U)
+        | (Adjacent::SW, Moves::L)
+        | (Adjacent::SE, Moves::R)
+        | (Adjacent::E, Moves::NE)
+        | (Adjacent::W, Moves::NW) => {
             adj[i] = Adjacent::S;
         }
-        (Adjacent::On, Moves::D) => {
+        (Adjacent::On, Moves::D)
+        | (Adjacent::NW, Moves::L)
+        | (Adjacent::NE, Moves::R)
+        | (Adjacent::E, Moves::SE)
+        | (Adjacent::W, Moves::SW) => {
             adj[i] = Adjacent::N;
         }
-        (Adjacent::On, Moves::NE) => {
+        (Adjacent::On, Moves::NE) | (Adjacent::S, Moves::R) | (Adjacent::W, Moves::U) => {
             adj[i] = Adjacent::SW;
         }
-        (Adjacent::On, Moves::SE) => {
+        (Adjacent::On, Moves::SE) | (Adjacent::N, Moves::R) | (Adjacent::W, Moves::D) => {
             adj[i] = Adjacent::NW;
         }
-        (Adjacent::On, Moves::NW) => {
+        (Adjacent::On, Moves::NW) | (Adjacent::S, Moves::L) | (Adjacent::E, Moves::U) => {
             adj[i] = Adjacent::SE;
         }
-        (Adjacent::On, Moves::SW) => {
+        (Adjacent::On, Moves::SW) | (Adjacent::N, Moves::L) | (Adjacent::E, Moves::D) => {
             adj[i] = Adjacent::NE;
         }
 
         (Adjacent::W, Moves::R) => {
             adj[i] = Adjacent::W;
             cur[i] = Location(cur[i].0 + 1, cur[i].1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, dir, cur, tail);
         }
-        (Adjacent::W, Moves::L) => {
+        (Adjacent::W, Moves::L)
+        | (Adjacent::NW, Moves::NW)
+        | (Adjacent::NE, Moves::NE)
+        | (Adjacent::SW, Moves::SW)
+        | (Adjacent::SE, Moves::SE)
+        | (Adjacent::N, Moves::U)
+        | (Adjacent::S, Moves::D)
+        | (Adjacent::E, Moves::R) => {
             adj[i] = Adjacent::On;
         }
-        (Adjacent::W, Moves::U) => {
-            adj[i] = Adjacent::SW;
-        }
-        (Adjacent::W, Moves::D) => {
-            adj[i] = Adjacent::NW;
-        }
-        (Adjacent::W, Moves::NE) => {
+        (Adjacent::W, Moves::NE) | (Adjacent::SW, Moves::R) => {
             adj[i] = Adjacent::W;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NE, cur);
+            process(i + 1, adj, &Moves::NE, cur, tail);
         }
-        (Adjacent::W, Moves::SE) => {
+        (Adjacent::W, Moves::SE) | (Adjacent::NW, Moves::R) => {
             adj[i] = Adjacent::W;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SE, cur);
-        }
-        (Adjacent::W, Moves::NW) => {
-            adj[i] = Adjacent::S;
-        }
-        (Adjacent::W, Moves::SW) => {
-            adj[i] = Adjacent::N;
+            process(i + 1, adj, &Moves::SE, cur, tail);
         }
 
-        (Adjacent::E, Moves::R) => {
-            adj[i] = Adjacent::On;
-        }
         (Adjacent::E, Moves::L) => {
             adj[i] = Adjacent::E;
             cur[i] = Location(cur[i].0 - 1, cur[i].1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, dir, cur, tail);
         }
-        (Adjacent::E, Moves::U) => {
-            adj[i] = Adjacent::SE;
-        }
-        (Adjacent::E, Moves::D) => {
-            adj[i] = Adjacent::NE;
-        }
-        (Adjacent::E, Moves::NE) => {
-            adj[i] = Adjacent::S;
-        }
-        (Adjacent::E, Moves::SE) => {
-            adj[i] = Adjacent::N;
-        }
-        (Adjacent::E, Moves::NW) => {
+        (Adjacent::E, Moves::NW) | (Adjacent::SE, Moves::L) => {
             adj[i] = Adjacent::E;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NW, cur);
+            process(i + 1, adj, &Moves::NW, cur, tail);
         }
-        (Adjacent::E, Moves::SW) => {
+        (Adjacent::E, Moves::SW) | (Adjacent::NE, Moves::L) => {
             adj[i] = Adjacent::E;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SW, cur);
+            process(i + 1, adj, &Moves::SW, cur, tail);
         }
 
-        (Adjacent::S, Moves::R) => {
-            adj[i] = Adjacent::SW;
-        }
-        (Adjacent::S, Moves::L) => {
-            adj[i] = Adjacent::SE;
-        }
         (Adjacent::S, Moves::U) => {
             adj[i] = Adjacent::S;
             cur[i] = Location(cur[i].0, cur[i].1 + 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, dir, cur, tail);
         }
-        (Adjacent::S, Moves::D) => {
-            adj[i] = Adjacent::On;
-        }
-        (Adjacent::S, Moves::NE) => {
+        (Adjacent::S, Moves::NE) | (Adjacent::SW, Moves::U) => {
             adj[i] = Adjacent::S;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NE, cur);
+            process(i + 1, adj, &Moves::NE, cur, tail);
         }
-        (Adjacent::S, Moves::SE) => {
+        (Adjacent::S, Moves::SE)
+        | (Adjacent::NW, Moves::U)
+        | (Adjacent::SW, Moves::D)
+        | (Adjacent::N, Moves::NE)
+        | (Adjacent::On, Moves::R) => {
             adj[i] = Adjacent::W;
         }
-        (Adjacent::S, Moves::NW) => {
+        (Adjacent::S, Moves::NW) | (Adjacent::SE, Moves::U) => {
             adj[i] = Adjacent::S;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NW, cur);
-        }
-        (Adjacent::S, Moves::SW) => {
-            adj[i] = Adjacent::E;
+            process(i + 1, adj, &Moves::NW, cur, tail);
         }
 
-        (Adjacent::N, Moves::R) => {
-            adj[i] = Adjacent::NW;
-        }
-        (Adjacent::N, Moves::L) => {
-            adj[i] = Adjacent::NE;
-        }
-        (Adjacent::N, Moves::U) => {
-            adj[i] = Adjacent::On;
-        }
         (Adjacent::N, Moves::D) => {
             adj[i] = Adjacent::N;
             cur[i] = Location(cur[i].0, cur[i].1 - 1);
-            process(i + 1, adj, dir, cur);
+            process(i + 1, adj, dir, cur, tail);
         }
-        (Adjacent::N, Moves::NE) => {
-            adj[i] = Adjacent::W;
-        }
-        (Adjacent::N, Moves::SE) => {
+        (Adjacent::N, Moves::SE) | (Adjacent::NW, Moves::D) => {
             adj[i] = Adjacent::N;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SE, cur);
+            process(i + 1, adj, &Moves::SE, cur, tail);
         }
-        (Adjacent::N, Moves::NW) => {
-            adj[i] = Adjacent::E;
-        }
-        (Adjacent::N, Moves::SW) => {
+        (Adjacent::N, Moves::SW) | (Adjacent::NE, Moves::D) => {
             adj[i] = Adjacent::N;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SW, cur);
+            process(i + 1, adj, &Moves::SW, cur, tail);
         }
 
-        (Adjacent::SE, Moves::R) => {
-            adj[i] = Adjacent::S;
-        }
-        (Adjacent::SE, Moves::L) => {
-            adj[i] = Adjacent::E;
-            cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NW, cur);
-        }
-        (Adjacent::SE, Moves::U) => {
-            adj[i] = Adjacent::S;
-            cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NW, cur);
-        }
-        (Adjacent::SE, Moves::D) => {
-            adj[i] = Adjacent::E;
-        }
-        (Adjacent::SE, Moves::NE) => {
+        (Adjacent::SE, Moves::NE) | (Adjacent::SW, Moves::NW) => {
             adj[i] = Adjacent::S;
             cur[i] = Location(cur[i].0, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::U, cur);
-        }
-        (Adjacent::SE, Moves::SE) => {
-            adj[i] = Adjacent::On;
+            process(i + 1, adj, &Moves::U, cur, tail);
         }
         (Adjacent::SE, Moves::NW) => {
             adj[i] = Adjacent::SE;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NW, cur);
+            process(i + 1, adj, &Moves::NW, cur, tail);
         }
-        (Adjacent::SE, Moves::SW) => {
+        (Adjacent::SE, Moves::SW) | (Adjacent::NE, Moves::NW) => {
             adj[i] = Adjacent::E;
             cur[i] = Location(cur[i].0 - 1, cur[i].1);
-            process(i + 1, adj, &Moves::L, cur);
+            process(i + 1, adj, &Moves::L, cur, tail);
         }
 
-        (Adjacent::SW, Moves::R) => {
-            adj[i] = Adjacent::W;
-            cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NE, cur);
-        }
-        (Adjacent::SW, Moves::L) => {
-            adj[i] = Adjacent::S;
-        }
-        (Adjacent::SW, Moves::U) => {
-            adj[i] = Adjacent::S;
-            cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NE, cur);
-        }
-        (Adjacent::SW, Moves::D) => {
-            adj[i] = Adjacent::W;
-        }
         (Adjacent::SW, Moves::NE) => {
             adj[i] = Adjacent::SW;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::NE, cur);
+            process(i + 1, adj, &Moves::NE, cur, tail);
         }
-        (Adjacent::SW, Moves::SE) => {
+        (Adjacent::SW, Moves::SE) | (Adjacent::NW, Moves::NE) => {
             adj[i] = Adjacent::W;
             cur[i] = Location(cur[i].0 + 1, cur[i].1);
-            process(i + 1, adj, &Moves::R, cur);
-        }
-        (Adjacent::SW, Moves::NW) => {
-            adj[i] = Adjacent::S;
-            cur[i] = Location(cur[i].0, cur[i].1 + 1);
-            process(i + 1, adj, &Moves::U, cur);
-        }
-        (Adjacent::SW, Moves::SW) => {
-            adj[i] = Adjacent::On;
+            process(i + 1, adj, &Moves::R, cur, tail);
         }
 
-        (Adjacent::NE, Moves::R) => {
-            adj[i] = Adjacent::N;
-        }
-        (Adjacent::NE, Moves::L) => {
-            adj[i] = Adjacent::E;
-            cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SW, cur);
-        }
-        (Adjacent::NE, Moves::U) => {
-            adj[i] = Adjacent::E;
-        }
-        (Adjacent::NE, Moves::D) => {
-            adj[i] = Adjacent::N;
-            cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SW, cur);
-        }
-        (Adjacent::NE, Moves::NE) => {
-            adj[i] = Adjacent::On;
-        }
-        (Adjacent::NE, Moves::SE) => {
+        (Adjacent::NE, Moves::SE) | (Adjacent::NW, Moves::SW) => {
             adj[i] = Adjacent::N;
             cur[i] = Location(cur[i].0, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::D, cur);
-        }
-        (Adjacent::NE, Moves::NW) => {
-            adj[i] = Adjacent::E;
-            cur[i] = Location(cur[i].0 - 1, cur[i].1);
-            process(i + 1, adj, &Moves::L, cur);
+            process(i + 1, adj, &Moves::D, cur, tail);
         }
         (Adjacent::NE, Moves::SW) => {
             adj[i] = Adjacent::NE;
             cur[i] = Location(cur[i].0 - 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SW, cur);
+            process(i + 1, adj, &Moves::SW, cur, tail);
         }
 
-        (Adjacent::NW, Moves::R) => {
-            adj[i] = Adjacent::W;
-            cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SE, cur);
-        }
-        (Adjacent::NW, Moves::L) => {
-            adj[i] = Adjacent::N;
-        }
-        (Adjacent::NW, Moves::U) => {
-            adj[i] = Adjacent::W;
-        }
-        (Adjacent::NW, Moves::D) => {
-            adj[i] = Adjacent::N;
-            cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SE, cur);
-        }
-        (Adjacent::NW, Moves::NE) => {
-            adj[i] = Adjacent::W;
-            cur[i] = Location(cur[i].0 + 1, cur[i].1);
-            process(i + 1, adj, &Moves::R, cur);
-        }
         (Adjacent::NW, Moves::SE) => {
             adj[i] = Adjacent::NW;
             cur[i] = Location(cur[i].0 + 1, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::SE, cur);
-        }
-        (Adjacent::NW, Moves::NW) => {
-            adj[i] = Adjacent::On;
-        }
-        (Adjacent::NW, Moves::SW) => {
-            adj[i] = Adjacent::N;
-            cur[i] = Location(cur[i].0, cur[i].1 - 1);
-            process(i + 1, adj, &Moves::D, cur);
+            process(i + 1, adj, &Moves::SE, cur, tail);
         }
     }
 }

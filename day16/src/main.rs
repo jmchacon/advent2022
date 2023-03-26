@@ -14,6 +14,9 @@ use std::time::Instant;
 struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -30,52 +33,35 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let mut hm = HashMap::new();
-    for (line_num, line) in lines.iter().enumerate() {
-        let parts = line.split_whitespace().collect::<Vec<_>>();
-        assert!(parts.len() >= 10, "{} - bad line {line}", line_num + 1);
-
-        let rate = usize::from_str_radix(
-            parts[4]
-                .strip_prefix("rate=")
-                .unwrap()
-                .strip_suffix(";")
-                .unwrap(),
-            10,
-        )
-        .unwrap();
-        let mut n = Vec::new();
-        for p in &parts[9..] {
-            n.push(String::from(p.trim_end_matches(",")));
+    let hm = parse_lines(&lines)?;
+    if args.debug {
+        for (k, v) in &hm {
+            println!("{k} - {v:?}");
         }
-        hm.insert(
-            String::from(parts[1]),
-            Location {
-                flow: rate,
-                neighbors: n,
-            },
-        );
-    }
-    for (k, v) in &hm {
-        println!("{k} - {v:?}");
     }
     let perms = hm
         .keys()
         .filter(|k| *k == "AA" || hm[*k].flow != 0)
         .permutations(2)
         .collect::<Vec<_>>();
-    println!("perms");
+    if args.debug {
+        println!("perms");
+    }
     let mut paths = HashMap::new();
     for p in &perms {
         let key = p[0].clone() + "->" + p[1];
         paths.insert(key.clone(), find_path(&hm, p[0], p[1]));
-        println!("{key} - {:?}", paths[&key]);
+        if args.debug {
+            println!("{key} - {:?}", paths[&key]);
+        }
     }
     let nodes = hm
         .iter()
         .filter(|(_, v)| v.flow != 0)
         .collect::<HashMap<_, _>>();
-    println!("nodes - {nodes:?}");
+    if args.debug {
+        println!("nodes - {nodes:?}");
+    }
 
     let mut best = Vec::new();
     let mut max = 0;
@@ -83,7 +69,7 @@ fn main() -> Result<()> {
         let mut c: u64 = 0;
         for x in nodes.keys().permutations(nodes.len()) {
             c += 1;
-            if c % 1000000 == 0 {
+            if args.debug && c % 1_000_000 == 0 {
                 println!("{c}");
             }
 
@@ -111,14 +97,14 @@ fn main() -> Result<()> {
                 }
             }
         }
-        println!("AA -> {best:?} {max}");
+        println!("part1 - AA -> {best:?} {max}");
     }
     let cur = String::from("AA");
-    let flows = nodes.keys().cloned().collect::<Vec<_>>();
+    let flows = nodes.keys().copied().collect::<Vec<_>>();
     let now = Instant::now();
     let ret = find_best(&cur, &flows, &nodes, &paths, 30);
     let elapsed = Instant::now().duration_since(now);
-    println!("{elapsed:?} AA -> {:?} {}", ret.1, ret.0);
+    println!("part1 - {elapsed:?} AA -> {:?} {}", ret.1, ret.0);
 
     // Generate all P(flows.len(), flows.len()/2) perms and then for each one of those run again on the remainder
     // NOTE: We can't just generate them all with itertools.permutate() since many paths have early ends (see test
@@ -126,7 +112,7 @@ fn main() -> Result<()> {
     // can't work. This drastically reduces the search space to something which takes 5s to run.
     let mut v = Vec::<String>::new();
     let now = Instant::now();
-    let new = find_best2(
+    let new_time = find_best2(
         &cur,
         &flows,
         &nodes,
@@ -138,22 +124,52 @@ fn main() -> Result<()> {
         flows.len() / 2,
     );
     let elapsed = Instant::now().duration_since(now);
-    println!("{elapsed:?} score {} from {:?}", new.0, new.1);
+    println!(
+        "part2 - {elapsed:?} -> from {:?} {}",
+        new_time.1, new_time.0
+    );
 
     Ok(())
 }
 
+fn parse_lines(lines: &[String]) -> Result<HashMap<String, Location>> {
+    let mut hm = HashMap::new();
+    for (line_num, line) in lines.iter().enumerate() {
+        let parts = line.split_whitespace().collect::<Vec<_>>();
+        assert!(parts.len() >= 10, "{} - bad line {line}", line_num + 1);
+
+        let rate = parts[4]
+            .strip_prefix("rate=")
+            .unwrap()
+            .strip_suffix(';')
+            .unwrap()
+            .parse::<usize>()?;
+        let mut n = Vec::new();
+        for p in &parts[9..] {
+            n.push(String::from(p.trim_end_matches(',')));
+        }
+        hm.insert(
+            String::from(parts[1]),
+            Location {
+                flow: rate,
+                neighbors: n,
+            },
+        );
+    }
+    Ok(hm)
+}
+
 fn find_best(
-    cur: &String,
-    flows: &Vec<&String>,
+    cur: &str,
+    flows: &[&String],
     nodes: &HashMap<&String, &Location>,
     paths: &HashMap<String, Vec<&String>>,
     minutes: usize,
 ) -> (usize, Vec<String>) {
     let mut choices = Vec::new();
 
-    for f in flows.iter().cloned() {
-        let key = cur.clone() + "->" + f;
+    for f in flows.iter().copied() {
+        let key = format!("{cur}->{f}");
         let steps = paths[&key].len();
 
         // Prune off branches that can't finish.
@@ -167,7 +183,7 @@ fn find_best(
         let rest = flows
             .iter()
             .filter(|v| **v != f)
-            .cloned()
+            .copied()
             .collect::<Vec<_>>();
         let mut new = find_best(f, &rest, nodes, paths, minutes - steps);
         let mut p = Vec::from([f.clone()]);
@@ -177,13 +193,14 @@ fn find_best(
     choices
         .iter()
         .max()
-        .unwrap_or(&(0, Vec::from([cur.clone()])))
+        .unwrap_or(&(0, Vec::from([String::from(cur)])))
         .clone()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn find_best2(
-    cur: &String,
-    flows: &Vec<&String>,
+    cur: &str,
+    flows: &[&String],
     nodes: &HashMap<&String, &Location>,
     paths: &HashMap<String, Vec<&String>>,
     minutes: usize,
@@ -193,10 +210,10 @@ fn find_best2(
     max_depth: usize,
 ) -> (usize, Vec<String>) {
     let mut choices = Vec::new();
-    cur_path.push(cur.clone());
-    for f in flows.iter().cloned() {
+    cur_path.push(String::from(cur));
+    for f in flows.iter().copied() {
         if depth < max_depth {
-            let key = cur.clone() + "->" + f;
+            let key = format!("{cur}->{f}");
             let steps = paths[&key].len();
 
             // Prune off branches that can't finish.
@@ -209,7 +226,7 @@ fn find_best2(
             let rest = flows
                 .iter()
                 .filter(|v| **v != f)
-                .cloned()
+                .copied()
                 .collect::<Vec<_>>();
             choices.push(find_best2(
                 f,
@@ -237,7 +254,7 @@ fn find_best2(
             if minutes > 1 {
                 cur_flow += (minutes - 1) * nodes[&cur_path[cur_path.len() - 1]].flow;
             }
-            let mut new = find_best(&cur_path[0], &flows, &nodes, &paths, 26);
+            let mut new = find_best(&cur_path[0], flows, nodes, paths, 26);
             p.append(&mut new.1);
             choices.push((new.0 + cur_flow, p));
             break;
@@ -247,7 +264,7 @@ fn find_best2(
     choices
         .iter()
         .max()
-        .unwrap_or(&(0, Vec::from([cur.clone()])))
+        .unwrap_or(&(0, Vec::from([String::from(cur)])))
         .clone()
 }
 
@@ -259,7 +276,7 @@ fn find_path<'a>(
     let mut deq = VecDeque::new();
     deq.push_back(Vec::from([start]));
     let mut path;
-    while deq.len() > 0 {
+    while !deq.is_empty() {
         path = deq.pop_front().unwrap();
         let check = path[path.len() - 1];
         if check == end {
@@ -278,5 +295,5 @@ fn find_path<'a>(
             deq.push_back(newpath);
         }
     }
-    return Vec::new();
+    Vec::new()
 }

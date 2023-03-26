@@ -14,6 +14,9 @@ use strum_macros::Display;
 struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 }
 
 #[derive(Clone, Debug, Display, Eq, Hash, PartialEq)]
@@ -43,6 +46,7 @@ struct Definition<'a> {
     op: Entry<'a>,
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<()> {
     color_eyre::install()?;
     let args: Args = Args::parse();
@@ -51,72 +55,44 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let mut hm = HashMap::new();
-    for (line_num, line) in lines.iter().enumerate() {
-        let parts = line.split_whitespace().collect::<Vec<_>>();
-
-        let key = parts[0].trim_end_matches(":");
-        match parts.len() {
-            2 => {
-                let val = i64::from_str_radix(parts[1], 10).unwrap();
-                hm.insert(
-                    key,
-                    Definition {
-                        children: vec![],
-                        op: Entry {
-                            name: key,
-                            value: Item::Value(val),
-                        },
-                    },
-                );
-            }
-            4 => {
-                let op = match parts[2] {
-                    "+" => Operation::Plus,
-                    "-" => Operation::Minus,
-                    "*" => Operation::Multiply,
-                    "/" => Operation::Divide,
-                    _ => panic!("{} - bad line {line}", line_num + 1),
-                };
-                hm.insert(
-                    key,
-                    Definition {
-                        children: vec![parts[1], parts[3]],
-                        op: Entry {
-                            name: key,
-                            value: Item::Operation(op),
-                        },
-                    },
-                );
-            }
-            _ => panic!("{} - bad line {line}", line_num + 1),
+    let hm = parse_lines(&lines)?;
+    if args.debug {
+        for (k, v) in &hm {
+            println!("{k} -> {v:?}");
         }
     }
-
-    for (k, v) in &hm {
-        println!("{k} -> {v:?}");
-    }
-
     let mut tree = make_tree(&hm);
 
     let mut s = String::new();
-    tree.write_formatted(&mut s).unwrap();
-    println!("{s}");
+    if args.debug {
+        tree.write_formatted(&mut s)?;
+        println!("{s}");
+    }
 
     transform_tree(&mut tree, false);
 
-    s.clear();
-    tree.write_formatted(&mut s).unwrap();
-    println!("{s}");
+    if args.debug {
+        s.clear();
+        tree.write_formatted(&mut s)?;
+        println!("{s}");
+    }
 
-    println!("root is {:?}", tree.root().unwrap().data());
+    let Item::Value(v) = tree.root().unwrap().data().value else {
+        panic!()
+    };
+    println!("part1 - {v}");
+    if args.debug {
+        println!("part1 - root is {:?}", tree.root().unwrap().data());
+    }
 
     let mut tree = make_tree(&hm);
     transform_tree(&mut tree, true);
 
-    s.clear();
-    tree.write_formatted(&mut s).unwrap();
-    println!("{s}");
+    if args.debug {
+        s.clear();
+        tree.write_formatted(&mut s)?;
+        println!("{s}");
+    }
 
     let mut cur = 0;
     let mut node = tree.root().unwrap();
@@ -130,7 +106,9 @@ fn main() -> Result<()> {
             node = c;
         }
     }
-    println!("{:?} = {cur}", node.data());
+    if args.debug {
+        println!("{:?} = {cur}", node.data());
+    }
     let mut ops = 0;
     loop {
         // Each step is
@@ -166,12 +144,10 @@ fn main() -> Result<()> {
         } else {
             1
         };
-        let child1_op = if let Item::Operation(_) = children[0].data().value {
-            false
-        } else {
-            true
-        };
-        println!("{op} {v} - {cur}");
+        let child1_op = !matches!(children[0].data().value, Item::Operation(_));
+        if args.debug {
+            println!("{op} {v} - {cur}");
+        }
         match op {
             Operation::Plus => {
                 // order here doesn't matter.
@@ -217,11 +193,58 @@ fn main() -> Result<()> {
             }
             Operation::Unknown => panic!(),
         };
-        println!("{cur}");
+        if args.debug {
+            println!("{cur}");
+        }
         node = tree.get(children[idx].node_id()).unwrap();
     }
-    println!("x = {cur} in {ops} ops");
+    println!("part2 - {cur} in {ops} ops");
     Ok(())
+}
+
+fn parse_lines(lines: &[String]) -> Result<HashMap<&str, Definition>> {
+    let mut hm = HashMap::new();
+    for (line_num, line) in lines.iter().enumerate() {
+        let parts = line.split_whitespace().collect::<Vec<_>>();
+
+        let key = parts[0].trim_end_matches(':');
+        match parts.len() {
+            2 => {
+                let val = parts[1].parse::<i64>()?;
+                hm.insert(
+                    key,
+                    Definition {
+                        children: vec![],
+                        op: Entry {
+                            name: key,
+                            value: Item::Value(val),
+                        },
+                    },
+                );
+            }
+            4 => {
+                let op = match *parts.get(2).unwrap() {
+                    "+" => Operation::Plus,
+                    "-" => Operation::Minus,
+                    "*" => Operation::Multiply,
+                    "/" => Operation::Divide,
+                    _ => panic!("{} - bad line {line}", line_num + 1),
+                };
+                hm.insert(
+                    key,
+                    Definition {
+                        children: vec![parts[1], parts[3]],
+                        op: Entry {
+                            name: key,
+                            value: Item::Operation(op),
+                        },
+                    },
+                );
+            }
+            _ => panic!("{} - bad line {line}", line_num + 1),
+        }
+    }
+    Ok(hm)
 }
 
 fn make_tree<'a>(hm: &'a HashMap<&str, Definition>) -> Tree<Entry<'a>> {
@@ -235,7 +258,6 @@ fn make_tree<'a>(hm: &'a HashMap<&str, Definition>) -> Tree<Entry<'a>> {
         let Some(e) = work.pop() else {
             break
         };
-        //println!("processing {e:?}");
         let op = hm.get(e.1).unwrap();
         let mut n = tree.get_mut(e.0).unwrap();
         match &op.op.value {
@@ -305,7 +327,6 @@ fn transform_tree(tree: &mut Tree<Entry>, part2: bool) {
                 }
             })
             .collect::<Vec<_>>();
-        //println!("Working on {op:?} for {vals:?}");
         let new: i64 = match op {
             Operation::Plus => vals.iter().sum(),
             Operation::Minus => vals[1] - vals[0],

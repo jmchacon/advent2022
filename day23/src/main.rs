@@ -15,6 +15,9 @@ struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
 
+    #[arg(long, default_value_t = false)]
+    debug: bool,
+
     #[arg(long, default_value_t = 10)]
     rounds: usize,
 }
@@ -37,9 +40,8 @@ impl Ord for Location {
         // the tuple.
         let o = self.1.cmp(&other.1);
         match o {
-            std::cmp::Ordering::Less => o,
             std::cmp::Ordering::Equal => self.0.cmp(&other.0),
-            std::cmp::Ordering::Greater => o,
+            std::cmp::Ordering::Greater | std::cmp::Ordering::Less => o,
         }
     }
 }
@@ -70,10 +72,7 @@ fn main() -> Result<()> {
         for (pos, c) in line.as_bytes().iter().enumerate() {
             match c {
                 b'#' => {
-                    map.insert(Location(
-                        pos.try_into().unwrap(),
-                        line_num.try_into().unwrap(),
-                    ));
+                    map.insert(Location(pos.try_into()?, line_num.try_into()?));
                 }
                 b'.' => {}
                 _ => panic!("{} - bad line {line}", line_num + 1),
@@ -82,40 +81,44 @@ fn main() -> Result<()> {
     }
 
     let orig = map.clone();
-    print_board(0, &map);
+    if args.debug {
+        print_board(0, &map);
+    }
 
     let rounds = run_rounds(args.rounds, &mut map, &rules);
-    let (mut minx, mut maxx, mut miny, mut maxy) = (i64::MAX, i64::MIN, i64::MAX, i64::MIN);
+    let (mut min_x, mut max_x, mut min_y, mut max_y) = (i64::MAX, i64::MIN, i64::MAX, i64::MIN);
     for m in &map {
-        if m.0 < minx {
-            minx = m.0;
+        if m.0 < min_x {
+            min_x = m.0;
         }
-        if m.0 > maxx {
-            maxx = m.0;
+        if m.0 > max_x {
+            max_x = m.0;
         }
-        if m.1 < miny {
-            miny = m.1;
+        if m.1 < min_y {
+            min_y = m.1;
         }
-        if m.1 > maxy {
-            maxy = m.1;
+        if m.1 > max_y {
+            max_y = m.1;
         }
     }
-    println!("rounds = {rounds}");
-    println!("{minx}-{maxx} x {miny}-{maxy}");
-    let area = ((maxx - minx + 1) * (maxy - miny + 1)) - map.len() as i64;
-    println!("area = {area}");
+    if args.debug {
+        println!("rounds = {rounds}");
+        println!("{min_x}-{max_x} x {min_y}-{max_y}");
+    }
+    let area = ((max_x - min_x + 1) * (max_y - min_y + 1)) - map.len() as i64;
+    println!("part1 - {area}");
 
-    map = orig.clone();
+    map = orig;
     let rounds = run_rounds(usize::MAX, &mut map, &rules);
-    println!("No movement on round {rounds}");
+    println!("part2 - No movement on round {rounds}");
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -> usize {
     let mut start_rule = 0;
     for r in 0..rounds {
         let mut proposed = HashMap::new();
-        println!("Starting with rule {}", rules[start_rule]);
         for l in map.iter() {
             let mut has_neighbors = false;
             for tests in [
@@ -139,10 +142,10 @@ fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -
             }
             for r in 0..rules.len() {
                 let i = (start_rule + r) % rules.len();
-                match rules[i] {
+                match rules.get(i).unwrap() {
                     Facing::North => {
                         if test_dir(
-                            &map,
+                            map,
                             l,
                             [
                                 &Location(l.0, l.1 - 1),
@@ -157,7 +160,7 @@ fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -
                     }
                     Facing::South => {
                         if test_dir(
-                            &map,
+                            map,
                             l,
                             [
                                 &Location(l.0, l.1 + 1),
@@ -172,7 +175,7 @@ fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -
                     }
                     Facing::West => {
                         if test_dir(
-                            &map,
+                            map,
                             l,
                             [
                                 &Location(l.0 - 1, l.1),
@@ -187,7 +190,7 @@ fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -
                     }
                     Facing::East => {
                         if test_dir(
-                            &map,
+                            map,
                             l,
                             [
                                 &Location(l.0 + 1, l.1),
@@ -204,7 +207,7 @@ fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -
             }
         }
 
-        if proposed.len() == 0 {
+        if proposed.is_empty() {
             return r + 1;
         }
         for p in &proposed {
@@ -215,7 +218,7 @@ fn run_rounds(rounds: usize, map: &mut HashSet<Location>, rules: &Vec<Facing>) -
         }
         start_rule += 1;
         start_rule %= rules.len();
-        print_board(r + 1, &map);
+        //print_board(r + 1, &map);
     }
     rounds
 }

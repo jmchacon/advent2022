@@ -1,4 +1,5 @@
 //! day3 advent 2022
+use clap::Parser;
 use color_eyre::eyre::Result;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -6,8 +7,21 @@ use std::io;
 use std::io::BufRead;
 use std::path::Path;
 
+#[derive(Parser)]
+#[command(author, version, about)]
+struct Args {
+    #[arg(long, default_value_t = String::from("input.txt"))]
+    filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
+}
+
 fn main() -> Result<()> {
-    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join("input.txt");
+    color_eyre::install()?;
+    let args: Args = Args::parse();
+
+    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join(args.filename);
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
@@ -27,7 +41,9 @@ fn main() -> Result<()> {
             if line_num != 0 {
                 for k in rucks.keys() {
                     if rucks[k].len() == 3 {
-                        println!("{} - common key - {k}", line_num);
+                        if args.debug {
+                            println!("{} - common key - {k}", line_num + 1);
+                        }
                         badges += compute(line_num, *k);
                     }
                 }
@@ -62,13 +78,15 @@ fn main() -> Result<()> {
     }
     for k in rucks.keys() {
         if rucks[k].len() == 3 {
-            println!("{} - common key - {k}", lines.len());
+            if args.debug {
+                println!("{} - common key - {k}", lines.len());
+            }
             badges += compute(0, *k);
         }
     }
 
-    println!("sum: {sum}");
-    println!("badges: {badges}");
+    println!("part1: {sum}");
+    println!("part2: {badges}");
     Ok(())
 }
 
@@ -79,8 +97,5 @@ fn compute(_line_num: usize, c: char) -> u32 {
         top = 'a';
         add = 1;
     }
-    let new = c as u32 - top as u32 + add;
-
-    //println!("{} {top} - common {c} {new}", line_num + 1);
-    new
+    c as u32 - top as u32 + add
 }

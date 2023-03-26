@@ -12,6 +12,9 @@ use std::path::Path;
 struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -25,59 +28,50 @@ fn main() -> Result<()> {
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
-    let mut squares = Vec::new();
-    for (line_num, line) in lines.iter().enumerate() {
-        let parts = line.split(",").collect::<Vec<_>>();
-        assert!(parts.len() == 3, "{} - bad line {line}", line_num + 1);
-        squares.push(Location(
-            i64::from_str_radix(parts[0], 10).unwrap(),
-            i64::from_str_radix(parts[1], 10).unwrap(),
-            i64::from_str_radix(parts[2], 10).unwrap(),
-        ))
-    }
+    let squares = parse_lines(&lines)?;
     let mut lava = HashSet::new();
-    squares.iter().for_each(|v| {
+    for v in &squares {
         lava.insert(v.clone());
-    });
+    }
     // If nothing touches we get 6 faces per square.
-    let (mut maxx, mut maxy, mut maxz) = (i64::MIN, i64::MIN, i64::MIN);
-    let (mut minx, mut miny, mut minz) = (i64::MAX, i64::MAX, i64::MAX);
+    let (mut max_x, mut max_y, mut max_z) = (i64::MIN, i64::MIN, i64::MIN);
+    let (mut min_x, mut min_y, mut min_z) = (i64::MAX, i64::MAX, i64::MAX);
     let mut faces = squares.len() * 6;
     for i in 0..squares.len() {
         let compare = &squares[i];
-        if compare.0 > maxx {
-            maxx = compare.0
+        if compare.0 > max_x {
+            max_x = compare.0;
         }
-        if compare.1 > maxy {
-            maxy = compare.1
+        if compare.1 > max_y {
+            max_y = compare.1;
         }
-        if compare.2 > maxz {
-            maxz = compare.2
+        if compare.2 > max_z {
+            max_z = compare.2;
         }
-        if compare.0 < minx {
-            minx = compare.0
+        if compare.0 < min_x {
+            min_x = compare.0;
         }
-        if compare.1 < miny {
-            miny = compare.1
+        if compare.1 < min_y {
+            min_y = compare.1;
         }
-        if compare.2 < minz {
-            minz = compare.2
+        if compare.2 < min_z {
+            min_z = compare.2;
         }
-        for j in i + 1..squares.len() {
-            faces -= touching(compare, &squares[j]);
+        for s in squares.iter().skip(i + 1) {
+            faces -= touching(compare, s);
         }
     }
     // Make a bounding box one larger to surround this.
-    minx -= 1;
-    miny -= 1;
-    minz -= 1;
-    maxx += 1;
-    maxy += 1;
-    maxz += 1;
+    min_x -= 1;
+    min_y -= 1;
+    min_z -= 1;
+    max_x += 1;
+    max_y += 1;
+    max_z += 1;
 
-    let mut choices = Vec::from([Location(minx, miny, minz)]);
+    let mut choices = Vec::from([Location(min_x, min_y, min_z)]);
     let mut water = HashSet::new();
-    while choices.len() > 0 {
+    while !choices.is_empty() {
         let cur = choices.pop().unwrap();
         for dir in &[
             Location(cur.0 + 1, cur.1, cur.2),
@@ -93,12 +87,12 @@ fn main() -> Result<()> {
                 continue;
             }
             // Outside box. Just skip.
-            if dir.0 < minx
-                || dir.0 > maxx
-                || dir.1 < miny
-                || dir.1 > maxy
-                || dir.2 < minz
-                || dir.2 > maxz
+            if dir.0 < min_x
+                || dir.0 > max_x
+                || dir.1 < min_y
+                || dir.1 > max_y
+                || dir.2 < min_z
+                || dir.2 > max_z
             {
                 //println!("skipping {cur:?} because {dir:?} outside");
                 continue;
@@ -127,13 +121,28 @@ fn main() -> Result<()> {
             }
         }
     }
-    println!("min,max x {minx},{maxx}");
-    println!("min,max y {miny},{maxy}");
-    println!("min,max z {minz},{maxz}");
-    println!("{faces}");
-    println!("{faces2}");
+    if args.debug {
+        println!("min,max x {min_x},{max_x}");
+        println!("min,max y {min_y},{max_y}");
+        println!("min,max z {min_z},{max_z}");
+    }
+    println!("part1 - {faces}");
+    println!("part2 - {faces2}");
 
     Ok(())
+}
+
+fn parse_lines(lines: &[String]) -> Result<Vec<Location>> {
+    let mut squares = Vec::new();
+    for (line_num, line) in lines.iter().enumerate() {
+        let parts = line.split(',').collect::<Vec<_>>();
+        assert!(parts.len() == 3, "{} - bad line {line}", line_num + 1);
+        let x = parts[0].parse::<i64>()?;
+        let y = parts[1].parse::<i64>()?;
+        let z = parts[2].parse::<i64>()?;
+        squares.push(Location(x, y, z));
+    }
+    Ok(squares)
 }
 
 fn touching(entry: &Location, compare: &Location) -> usize {

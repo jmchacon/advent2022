@@ -1,5 +1,6 @@
 //! day10 advent 2022
 use color_eyre::eyre::Result;
+use std::fmt::Write;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
@@ -14,6 +15,7 @@ fn main() -> Result<()> {
     let mut cycles = 0;
     let mut sum = 0;
     let mut pixel = 0;
+    let mut led = String::new();
     for (line_num, line) in lines.iter().enumerate() {
         let parts: Vec<&str> = line.split_whitespace().collect();
 
@@ -25,11 +27,11 @@ fn main() -> Result<()> {
 
         let mut run: usize = 1;
         let mut add = None;
-        match parts[0] {
+        match *parts.first().unwrap() {
             "noop" => {}
             "addx" => {
                 run = 2;
-                let val = i32::from_str_radix(parts[1], 10).unwrap();
+                let val = parts[1].parse::<i32>()?;
                 add = Some(val);
             }
             _ => {
@@ -40,15 +42,14 @@ fn main() -> Result<()> {
             cycles += 1;
             if cycles == 20 || (cycles > 20 && (cycles - 20) % 40 == 0) {
                 sum += cycles * x;
-                //println!("{cycles} {}", cycles * x);
             }
             let mut out = ".";
             if pixel >= x - 1 && pixel <= x + 1 {
                 out = "#";
             }
-            print!("{out}");
+            write!(led, "{out}")?;
             if cycles % 40 == 0 {
-                println!("");
+                writeln!(led)?;
             }
             pixel += 1;
             if pixel >= 40 {
@@ -59,6 +60,8 @@ fn main() -> Result<()> {
             x += v;
         }
     }
-    println!("sum {sum}");
+    println!("part1 - {sum}");
+    println!("part2 -");
+    print!("{led}");
     Ok(())
 }

@@ -1,4 +1,5 @@
 //! day7 advent 2022
+use clap::Parser;
 use color_eyre::eyre::Result;
 use slab_tree::tree::TreeBuilder;
 use std::collections::HashMap;
@@ -7,19 +8,33 @@ use std::io;
 use std::io::BufRead;
 use std::path::Path;
 
+#[derive(Parser)]
+#[command(author, version, about)]
+struct Args {
+    #[arg(long, default_value_t = String::from("input.txt"))]
+    filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
+}
+
 #[derive(Debug)]
 struct Ent {
     name: String,
     size: usize,
 }
 
+const TOTAL_SIZE: usize = 70_000_000;
+const REQUIRED: usize = 30_000_000;
+
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<()> {
-    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join("input.txt");
+    color_eyre::install()?;
+    let args: Args = Args::parse();
+
+    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join(args.filename);
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
-
-    const TOTAL_SIZE: usize = 70000000;
-    const REQUIRED: usize = 30000000;
 
     let mut tree = TreeBuilder::new()
         .with_root(Ent {
@@ -40,65 +55,63 @@ fn main() -> Result<()> {
             line_num + 1
         );
 
-        match fields[0] {
-            "$" => {
-                match fields[1] {
-                    "cd" => {
-                        assert!(fields.len() == 3, "{} - bad line - {line}", line_num + 1);
-                        match fields[2] {
-                            "/" => {
-                                cur_id = root_id;
-                            }
-                            ".." => {
-                                cur_id = tree.get(cur_id).unwrap().parent().unwrap().node_id();
-                            }
-                            _ => {
-                                let node = tree.get(cur_id).unwrap();
-                                let mut found = false;
-                                for n in node.children() {
-                                    if n.data().name == fields[2] {
-                                        cur_id = n.node_id();
-                                        found = true;
-                                        break;
-                                    }
-                                }
-                                if !found {
-                                    panic!(
-                                        "cd {} on line {} but not found",
-                                        fields[2],
-                                        line_num + 1
-                                    );
+        if *fields.first().unwrap() == "$" {
+            match *fields.get(1).unwrap() {
+                "cd" => {
+                    assert!(fields.len() == 3, "{} - bad line - {line}", line_num + 1);
+                    match *fields.get(2).unwrap() {
+                        "/" => {
+                            cur_id = root_id;
+                        }
+                        ".." => {
+                            cur_id = tree.get(cur_id).unwrap().parent().unwrap().node_id();
+                        }
+                        _ => {
+                            let node = tree.get(cur_id).unwrap();
+                            let mut found = false;
+                            for n in node.children() {
+                                if n.data().name == fields[2] {
+                                    cur_id = n.node_id();
+                                    found = true;
+                                    break;
                                 }
                             }
+                            assert!(
+                                found,
+                                "cd {} on line {} but not found",
+                                fields[2],
+                                line_num + 1
+                            );
                         }
                     }
-                    "ls" => {
-                        // nothing happens here
-                    }
-                    _ => panic!(
-                        "unknown field on line {} - {line} - {}",
-                        line_num + 1,
-                        fields[1]
-                    ),
                 }
-            }
-            _ => {
-                assert!(fields.len() == 2, "{} - bad line - {line}", line_num + 1);
-                let mut node = tree.get_mut(cur_id).unwrap();
-                let mut size = 0;
-                if fields[0] != "dir" {
-                    size = usize::from_str_radix(fields[0], 10).unwrap();
+                "ls" => {
+                    // nothing happens here
                 }
-                node.append(Ent {
-                    name: String::from(fields[1]),
-                    size: size,
-                });
+                _ => panic!(
+                    "unknown field on line {} - {line} - {}",
+                    line_num + 1,
+                    fields[1]
+                ),
             }
-        };
+        } else {
+            assert!(fields.len() == 2, "{} - bad line - {line}", line_num + 1);
+            let mut node = tree.get_mut(cur_id).unwrap();
+            let mut size = 0;
+            if fields[0] != "dir" {
+                size = fields[0].parse::<usize>()?;
+            }
+            node.append(Ent {
+                name: String::from(fields[1]),
+                size,
+            });
+        }
     }
     let mut s = String::new();
-    tree.write_formatted(&mut s).unwrap();
-    println!("{s}");
+    if args.debug {
+        tree.write_formatted(&mut s)?;
+        println!("{s}");
+    }
 
     let mut hm = HashMap::new();
     for node in tree.root().unwrap().traverse_post_order() {
@@ -110,12 +123,14 @@ fn main() -> Result<()> {
             if size == 0 {
                 size = hm[&node.node_id()];
             }
-            println!(
-                "adding {} from node {} to parent {}",
-                size,
-                node.data().name,
-                p.data().name
-            );
+            if args.debug {
+                println!(
+                    "adding {} from node {} to parent {}",
+                    size,
+                    node.data().name,
+                    p.data().name
+                );
+            }
             hm.entry(p.node_id())
                 .and_modify(|s| *s += size)
                 .or_insert(size);
@@ -129,7 +144,7 @@ fn main() -> Result<()> {
     for k in hm.keys() {
         let mut node = tree.get_mut(*k).unwrap();
         let size = hm[k];
-        if size <= 100000 {
+        if size <= 100_000 {
             sum += size;
         }
         if size >= needed {
@@ -138,11 +153,15 @@ fn main() -> Result<()> {
         node.data().size = size;
     }
     let mut s = String::new();
-    tree.write_formatted(&mut s).unwrap();
-    println!("{s}");
-    println!("sum: {sum}");
-    println!("unused: {unused}");
-    println!("needed: {needed}");
-    println!("min: {}", choices.iter().min().unwrap());
+    if args.debug {
+        tree.write_formatted(&mut s)?;
+        println!("{s}");
+    }
+    println!("part1: {sum}");
+    if args.debug {
+        println!("unused: {unused}");
+        println!("needed: {needed}");
+    }
+    println!("part2: {}", choices.iter().min().unwrap());
     Ok(())
 }

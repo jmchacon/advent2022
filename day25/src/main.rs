@@ -13,6 +13,9 @@ use std::path::Path;
 struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 }
 
 fn main() -> Result<()> {
@@ -25,15 +28,24 @@ fn main() -> Result<()> {
 
     let mut nums = Vec::new();
     for line in &lines {
-        nums.push(snafu(line).unwrap());
+        nums.push(snafu(line)?);
     }
-    for n in &nums {
-        println!("{n}");
+    if args.debug {
+        for n in &nums {
+            println!("{n}");
+        }
     }
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation
+    )]
     let sum = nums.iter().sum::<usize>() as f64;
-    println!("sum {sum}");
+    if args.debug {
+        println!("sum {sum}");
+    }
 
-    println!("convert: {}", convert(sum));
+    println!("part1 - {}", convert(sum)?);
     Ok(())
 }
 
@@ -55,44 +67,52 @@ fn snafu(inp: &str) -> Result<usize> {
     Ok(num)
 }
 
-fn convert(sum: f64) -> String {
+fn convert(sum: f64) -> Result<String> {
     let mut s = String::new();
 
     // Do an initial conversion to base 5
     // If it doesn't contain anything above a 2
     // in it this matches the snafu repr.
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     let mut pow = (sum.ln() / 5.0_f64.ln()).trunc() as usize;
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     let mut rem = sum as usize;
     while rem != 0 {
+        #[allow(
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap
+        )]
         let n = 5.0_f64.powi(pow as i32) as usize;
         let d = rem / n;
-        //println!("n {n} d {d} rem {rem} pow {pow}");
         rem %= n;
         pow -= 1;
-        write!(s, "{d}").unwrap();
+        write!(s, "{d}")?;
     }
     for _ in 0..=pow {
-        write!(s, "0").unwrap();
+        write!(s, "0")?;
     }
     if let Ok(new) = snafu(&s) {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         if new == sum as usize {
-            return s;
+            return Ok(s);
         }
     }
 
     // Convert to snafu by working right to left
     s.clear();
-    rem = sum as usize;
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let mut rem = sum as usize;
     while rem != 0 {
         match rem % 5 {
-            0 => write!(s, "0").unwrap(),
-            1 => write!(s, "1").unwrap(),
-            2 => write!(s, "2").unwrap(),
-            3 => write!(s, "=").unwrap(),
-            4 => write!(s, "-").unwrap(),
+            0 => write!(s, "0")?,
+            1 => write!(s, "1")?,
+            2 => write!(s, "2")?,
+            3 => write!(s, "=")?,
+            4 => write!(s, "-")?,
             _ => panic!(),
         }
         rem = (rem + 2) / 5;
     }
-    s.chars().rev().collect::<String>()
+    Ok(s.chars().rev().collect::<String>())
 }

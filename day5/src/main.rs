@@ -1,12 +1,26 @@
 //! day5 advent 2022
+use clap::Parser;
 use color_eyre::eyre::Result;
 use std::fs::File;
 use std::io;
 use std::io::BufRead;
 use std::path::Path;
 
+#[derive(Parser)]
+#[command(author, version, about)]
+struct Args {
+    #[arg(long, default_value_t = String::from("input.txt"))]
+    filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
+}
+
 fn main() -> Result<()> {
-    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join("input.txt");
+    color_eyre::install()?;
+    let args: Args = Args::parse();
+
+    let filename = Path::new(env!("CARGO_MANIFEST_DIR")).join(args.filename);
     let file = File::open(filename)?;
     let lines: Vec<String> = io::BufReader::new(file).lines().flatten().collect();
 
@@ -34,19 +48,23 @@ fn main() -> Result<()> {
     ];
     for (line_num, l) in lines.iter().enumerate() {
         let parts: Vec<&str> = l.split_whitespace().collect();
-        if parts.len() == 0 || parts[0] != "move" {
-            println!("skipping - {l}");
+        if parts.is_empty() || parts[0] != "move" {
+            if args.debug {
+                println!("skipping - {l}");
+            }
             continue;
         }
         assert!(parts.len() == 6, "{} - bad line - {l}", line_num + 1);
-        let num = u32::from_str_radix(parts[1], 10)?;
-        let src = usize::from_str_radix(parts[3], 10)?;
-        let dest = usize::from_str_radix(parts[5], 10)?;
+        let num = parts[1].parse::<u32>()?;
+        let src = parts[3].parse::<usize>()?;
+        let dest = parts[5].parse::<usize>()?;
 
         let mut t = Vec::<char>::new();
-        for _ in 0..num {
+        for i in 0..num {
             let v = stacks[src - 1].pop().unwrap();
-            //println!("{} - {l} - {i} {src} {dest}", line_num + 1);
+            if args.debug {
+                println!("{} - {l} - {i} {src} {dest}", line_num + 1);
+            }
             stacks[dest - 1].push(v);
             let v = stacks9001[src - 1].pop().unwrap();
             t.push(v);
@@ -56,11 +74,15 @@ fn main() -> Result<()> {
             stacks9001[dest - 1].push(v);
         }
     }
+    print!("part1 - ");
     for mut v in stacks {
-        println!("top - {}", v.pop().unwrap());
+        print!("{}", v.pop().unwrap());
     }
+    println!();
+    print!("part2 - ");
     for mut v in stacks9001 {
-        println!("top9001 - {}", v.pop().unwrap());
+        print!("{}", v.pop().unwrap());
     }
+    println!();
     Ok(())
 }

@@ -12,6 +12,9 @@ use std::path::Path;
 struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
+
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -19,22 +22,30 @@ struct Location(usize, usize);
 
 impl Location {
     fn distance(&self, other: &Location) -> u32 {
-        (self.0.abs_diff(other.0) + self.1.abs_diff(other.1)) as u32
+        (self.0.abs_diff(other.0) + self.1.abs_diff(other.1))
+            .try_into()
+            .unwrap()
     }
+
     fn successors(&self, grid: &Vec<Vec<u8>>) -> Vec<(Self, u32)> {
-        let x = self.0 as i32;
-        let y = self.1 as i32;
+        let (x, y): (i32, i32) = (self.0.try_into().unwrap(), self.1.try_into().unwrap());
         let mut v = Vec::new();
-        let here = grid[self.1 as usize][self.0 as usize] as u32;
+        let here = u32::from(grid[self.1][self.0]);
         for i in [(x, y + 1), (x + 1, y), (x - 1, y), (x, y - 1)] {
-            if i.0 >= grid[0].len() as i32 || i.1 >= grid.len() as i32 || i.0 < 0 || i.1 < 0 {
+            if i.0 >= grid[0].len().try_into().unwrap()
+                || i.1 >= grid.len().try_into().unwrap()
+                || i.0 < 0
+                || i.1 < 0
+            {
                 continue;
             }
-            let val = grid[i.1 as usize][i.0 as usize] as u32;
+            #[allow(clippy::cast_sign_loss)]
+            let (x, y) = (i.0 as usize, i.1 as usize);
+            let val = u32::from(grid[y][x]);
             // Technically this can be handled with BFS so we're just reducing to that
             // by only adding nodes we like, not all nodes.
             if val <= here + 1 {
-                v.push((Self(i.0 as usize, i.1 as usize), 1));
+                v.push((Self(x, y), 1));
             }
         }
         v
@@ -87,11 +98,13 @@ fn main() -> Result<()> {
         |p| *p == end,
     )
     .unwrap();
-    for g in &grid {
-        println!("{g:?}");
+    if args.debug {
+        for g in &grid {
+            println!("{g:?}");
+        }
+        println!("begin - {begin:?} end - {end:?}");
     }
-    println!("begin - {begin:?} end - {end:?}");
-    println!("path: {}", res.0.len() - 1);
+    println!("part1 - {}", res.0.len() - 1);
 
     let mut best = Vec::new();
     for y in 0..grid.len() {
@@ -110,6 +123,6 @@ fn main() -> Result<()> {
             }
         }
     }
-    println!("best - {:?}", best.iter().min().unwrap());
+    println!("part2 - {:?}", best.iter().min().unwrap());
     Ok(())
 }

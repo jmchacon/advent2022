@@ -15,8 +15,8 @@ struct Args {
     #[arg(long, default_value_t = String::from("input.txt"))]
     filename: String,
 
-    #[arg(long, default_value_t = 2022)]
-    rocks: usize,
+    #[arg(long, default_value_t = false)]
+    debug: bool,
 
     #[arg(long, default_value_t = false)]
     print_each_step: bool,
@@ -52,14 +52,13 @@ impl Rock {
     fn height(&self) -> usize {
         match self {
             Rock::HLine => 1,
-            Rock::Plus => 3,
-            Rock::Corner => 3,
+            Rock::Plus | Rock::Corner => 3,
             Rock::VLine => 4,
             Rock::Square => 2,
         }
     }
 
-    fn covers(&self, bottom_left: Location) -> HashSet<Location> {
+    fn covers(&self, bottom_left: &Location) -> HashSet<Location> {
         let mut v = HashSet::new();
         match self {
             Rock::HLine => {
@@ -148,14 +147,16 @@ fn main() -> Result<()> {
         }
     }
 
-    let now = Instant::now();
-    let highest = compute(args.rocks, args.print_each_step, &air);
-    let elapsed = now.elapsed();
-    println!("{elapsed:?} highest: {highest}");
+    for (pos, rocks) in [2022, 1_000_000_000_000].iter().enumerate() {
+        let now = Instant::now();
+        let highest = compute(*rocks, args.debug, args.print_each_step, &air);
+        let elapsed = now.elapsed();
+        println!("part{} - {elapsed:?} highest: {highest}", pos + 1);
+    }
     Ok(())
 }
 
-fn compute(iterations: usize, print_each: bool, air: &Vec<Dir>) -> usize {
+fn compute(iterations: usize, debug: bool, print_each: bool, air: &Vec<Dir>) -> usize {
     let mut filled = HashSet::new();
     for x in &[0, 8] {
         for y in 0..=4 {
@@ -165,7 +166,7 @@ fn compute(iterations: usize, print_each: bool, air: &Vec<Dir>) -> usize {
     for x in 0..=8 {
         filled.insert(Location(x, 0));
     }
-    print_board(print_each, &filled, &HashSet::new());
+    print_board(debug && print_each, &filled, &HashSet::new());
 
     let mut highest = 0;
     let mut start_y;
@@ -181,7 +182,7 @@ fn compute(iterations: usize, print_each: bool, air: &Vec<Dir>) -> usize {
             filled.insert(Location(8, y));
         }
 
-        let mut covered = cur.covers(Location(start_x, start_y));
+        let mut covered = cur.covers(&Location(start_x, start_y));
         print_board(print_each, &filled, &covered);
 
         loop {
@@ -207,20 +208,20 @@ fn compute(iterations: usize, print_each: bool, air: &Vec<Dir>) -> usize {
             // means the height at period start + (remaining periods * height diff) == total.
             if i > 1000 {
                 let key = (cur.clone(), air_pos);
-                if tracked.contains_key(&key) {
+                if let std::collections::hash_map::Entry::Vacant(e) = tracked.entry(key.clone()) {
+                    e.insert((i, highest));
+                } else {
                     let v = tracked[&key];
                     let period = i - v.0;
                     if i % period == iterations % period {
-                        println!("period {period} detected iterations {i} - {}", v.0,);
+                        if debug {
+                            println!("period {period} detected iterations {i} - {}", v.0,);
+                        }
                         let h = highest - v.1;
                         let remaining = iterations - i;
                         let c = (remaining / period) + 1;
                         return v.1 + (h * c);
-                    } else {
-                        //println!("bad period {period} at {i} - {}", v.0)
                     }
-                } else {
-                    tracked.insert(key, (i, highest));
                 }
             }
             // We don't care for the air direction if we moved or not.
@@ -234,15 +235,9 @@ fn compute(iterations: usize, print_each: bool, air: &Vec<Dir>) -> usize {
                 for c in &covered {
                     filled.insert(c.clone());
                 }
-                for n in filled.iter().filter_map(|l| {
-                    if l.0 > 0 && l.0 < 8 && l.1 != 0 {
-                        Some(l)
-                    } else {
-                        None
-                    }
-                }) {
+                for n in filled.iter().filter(|l| l.0 > 0 && l.0 < 8 && l.1 != 0) {
                     if n.1 > max {
-                        max = n.1
+                        max = n.1;
                     }
                 }
                 highest = max;
@@ -285,24 +280,24 @@ fn check_move(a: &Dir, covered: &mut HashSet<Location>, filled: &HashSet<Locatio
 fn print_board(print: bool, filled: &HashSet<Location>, covered: &HashSet<Location>) {
     if print {
         let mut combined = filled.clone();
-        combined = combined.union(&covered).cloned().collect();
+        combined = combined.union(covered).cloned().collect();
         let mut points = combined.iter().collect::<Vec<_>>();
         points.sort();
-        let mut cury = usize::MAX;
-        let mut curx = usize::MIN;
-        for p in points.iter().cloned().rev() {
-            if p.1 < cury {
+        let mut cur_y = usize::MAX;
+        let mut cur_x = usize::MIN;
+        for p in points.iter().copied().rev() {
+            if p.1 < cur_y {
                 println!();
-                curx = 0;
-                cury = p.1;
+                cur_x = 0;
+                cur_y = p.1;
             }
-            if p.0 - curx > 1 {
-                for _ in curx..p.0 - 1 {
+            if p.0 - cur_x > 1 {
+                for _ in cur_x..p.0 - 1 {
                     print!(" ");
                 }
             }
             print!("#");
-            curx = p.0;
+            cur_x = p.0;
         }
         println!();
         println!();
