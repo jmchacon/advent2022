@@ -67,7 +67,7 @@ fn main() -> Result<()> {
         let mut monkeys = monkeys.clone();
         for _ in 0..*rounds {
             for i in 0..monkeys.len() {
-                let mut monkey = &mut monkeys[i];
+                let monkey = &mut monkeys[i];
                 let mut new = Vec::new();
                 for item in &monkey.items {
                     let mut worry = *item;
