@@ -115,6 +115,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn build(
     turns: usize,
     max_ore: usize,
@@ -127,10 +128,18 @@ fn build(
         return rocks[3];
     }
     let mut choices = Vec::new();
-    let Robot::Ore(ore_ore) = blueprint[0] else { panic!()};
-    let Robot::Clay(clay_ore) = blueprint[1] else { panic!()};
-    let Robot::Obsidion(obs_ore, obs_clay) = blueprint[2] else {panic!()};
-    let Robot::Geode(geode_ore, geode_obs) = blueprint[3] else {panic!()};
+    let Robot::Ore(ore_ore) = blueprint[0] else {
+        panic!()
+    };
+    let Robot::Clay(clay_ore) = blueprint[1] else {
+        panic!()
+    };
+    let Robot::Obsidion(obs_ore, obs_clay) = blueprint[2] else {
+        panic!()
+    };
+    let Robot::Geode(geode_ore, geode_obs) = blueprint[3] else {
+        panic!()
+    };
     let (new_ore, new_clay, new_obsidion, new_geode) = (robots[0], robots[1], robots[2], robots[3]);
     if turns > 1 && rocks[0] >= geode_ore && rocks[2] >= geode_obs {
         // Check geode robot first.
