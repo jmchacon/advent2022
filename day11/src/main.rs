@@ -49,7 +49,9 @@ fn main() -> Result<()> {
     let mut monkeys = Vec::new();
     let mut it = lines.iter().enumerate();
     loop {
-        let Some((line_num, line)) = it.next() else { break; };
+        let Some((line_num, line)) = it.next() else {
+            break;
+        };
         let parts: Vec<&str> = line.split_whitespace().collect();
 
         parse_monkey(&mut it, &parts, &mut monkeys, line, line_num)?;
@@ -146,16 +148,20 @@ fn parse_monkey(
         };
 
         // Starting items: x, y
-        let Some((line_num, line)) = it.next() else { panic!("{} - bad line {line}", line_num+1); };
+        let Some((line_num, line)) = it.next() else {
+            panic!("{} - bad line {line}", line_num + 1);
+        };
         let parts: Vec<&str> = line.split_whitespace().collect();
         assert!(parts.len() > 2, "{} - bad line {line}", line_num + 1);
-        for item in parts[2..].iter() {
+        for item in &parts[2..] {
             let i = item.trim_matches(',').parse::<i128>()?;
             monkey.items.push(i);
         }
 
         // Operation: new = old + old
-        let Some((line_num, line)) = it.next() else { panic!("{} - bad line {line}", line_num+1); };
+        let Some((line_num, line)) = it.next() else {
+            panic!("{} - bad line {line}", line_num + 1);
+        };
         let parts: Vec<&str> = line.split_whitespace().collect();
         assert!(parts.len() == 6, "{} - bad line {line}", line_num + 1);
         if parts[4] == "*" {
@@ -168,19 +174,25 @@ fn parse_monkey(
         }
 
         // Test: divisible by 17
-        let Some((line_num, line)) = it.next() else { panic!("{} - bad line {line}", line_num+1); };
+        let Some((line_num, line)) = it.next() else {
+            panic!("{} - bad line {line}", line_num + 1);
+        };
         let parts: Vec<&str> = line.split_whitespace().collect();
         assert!(parts.len() == 4, "{} - bad line {line}", line_num + 1);
         monkey.test = parts[3].parse::<i128>()?;
 
         // If true: throw to monkey 4
-        let Some((line_num, line)) = it.next() else { panic!("{} - bad line {line}", line_num+1); };
+        let Some((line_num, line)) = it.next() else {
+            panic!("{} - bad line {line}", line_num + 1);
+        };
         let parts: Vec<&str> = line.split_whitespace().collect();
         assert!(parts.len() == 6, "{} - bad line {line}", line_num + 1);
         monkey.choice[0] = parts[5].parse::<usize>()?;
 
         // If false: throw to monkey 5
-        let Some((line_num, line)) = it.next() else { panic!("{} - bad line {line}", line_num+1); };
+        let Some((line_num, line)) = it.next() else {
+            panic!("{} - bad line {line}", line_num + 1);
+        };
         let parts: Vec<&str> = line.split_whitespace().collect();
         assert!(parts.len() == 6, "{} - bad line {line}", line_num + 1);
         monkey.choice[1] = parts[5].parse::<usize>()?;

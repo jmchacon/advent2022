@@ -71,8 +71,7 @@ fn main() -> Result<()> {
 
     let mut choices = Vec::from([Location(min_x, min_y, min_z)]);
     let mut water = HashSet::new();
-    while !choices.is_empty() {
-        let cur = choices.pop().unwrap();
+    while let Some(cur) = choices.pop() {
         for dir in &[
             Location(cur.0 + 1, cur.1, cur.2),
             Location(cur.0 - 1, cur.1, cur.2),
