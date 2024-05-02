@@ -54,6 +54,8 @@ default-members = [
     "./day25",
 ]
 
+resolver = "2"
+
 [profile.test]
 opt-level = 3
 
