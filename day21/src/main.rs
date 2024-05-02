@@ -255,9 +255,7 @@ fn make_tree<'a>(hm: &'a HashMap<&str, Definition>) -> Tree<Entry<'a>> {
         work.push((tree.root_id().unwrap(), *c));
     }
     loop {
-        let Some(e) = work.pop() else {
-            break
-        };
+        let Some(e) = work.pop() else { break };
         let op = hm.get(e.1).unwrap();
         let mut n = tree.get_mut(e.0).unwrap();
         match &op.op.value {

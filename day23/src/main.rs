@@ -105,7 +105,8 @@ fn main() -> Result<()> {
         println!("rounds = {rounds}");
         println!("{min_x}-{max_x} x {min_y}-{max_y}");
     }
-    let area = ((max_x - min_x + 1) * (max_y - min_y + 1)) - map.len() as i64;
+    let area = ((max_x - min_x + 1) * (max_y - min_y + 1))
+        - std::convert::TryInto::<i64>::try_into(map.len()).unwrap();
     println!("part1 - {area}");
 
     map = orig;

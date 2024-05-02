@@ -38,18 +38,16 @@ fn main() -> Result<()> {
             println!("{input:?}");
         }
         // We're modding indexes which are 0 based, not 1 so subtract 1.
-        let len = indexes.len() as i64 - 1;
+        let len = std::convert::TryInto::<i64>::try_into(indexes.len()).unwrap() - 1;
         for _ in 0..*rounds {
             for (pos, i) in input.iter().enumerate() {
-                let i = i; // % len;
-
                 let cur = indexes[pos];
 
                 if *i == 0 {
                     continue;
                 }
 
-                let mut new = cur as i64 + i;
+                let mut new = std::convert::TryInto::<i64>::try_into(cur).unwrap() + i;
                 // This mess deals with going negative.
                 // Move into the right range then add and mod off to get positive if needed.
                 new = ((new % len) + len) % len;
@@ -101,8 +99,7 @@ fn main() -> Result<()> {
 }
 
 fn make_indexes(input: &[i64], indexes: &Vec<usize>) -> Vec<i64> {
-    let mut fixed = Vec::new();
-    fixed.resize(indexes.len(), 0);
+    let mut fixed = vec![0; indexes.len()];
     for (pos, i) in indexes.iter().enumerate() {
         fixed[*i] = input[pos];
     }
