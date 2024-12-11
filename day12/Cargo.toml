@@ -13,4 +13,4 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 itertools = { workspace = true }
 grid = { workspace = true }
-pathfinding = "4.11.0"
+pathfinding = "4.12.0"
