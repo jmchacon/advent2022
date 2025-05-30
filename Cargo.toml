@@ -68,7 +68,7 @@ color-eyre = { version = "0.6.3", default-features = false }
 strum = "0.24.1"
 strum_macros = "0.24.1"
 grid = { git = "https://github.com/jmchacon/advent.git" }
-itertools = "0.13.0"
+itertools = "0.14.0"
 slab_tree = "0.3.2"
 
 [workspace.package]
