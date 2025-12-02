@@ -521,7 +521,7 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 [[package]]
 name = "grid"
 version = "0.1.0"
-source = "git+https://github.com/jmchacon/advent.git#adf264076a66b5d6ae4652184ad14e9e781ffa4b"
+source = "git+https://github.com/jmchacon/advent.git#709fef2d323b6361178d405660c63b8043839a8a"
 
 [[package]]
 name = "hashbrown"
